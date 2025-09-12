@@ -1,0 +1,88 @@
+###############################################
+# Git Ignore for Next.js / TypeScript project #
+###############################################
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+next-env.d.ts
+dist/
+dist-ssr/
+out/
+build/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Env files (except example)
+.env
+.env.*
+!.env.example
+
+# Deployment / platform
+.vercel
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.config/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDE / tooling
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+coverage/
+
+# Package manager locks (optional to ignore; uncomment desired)
+# yarn.lock
+# package-lock.json
+# pnpm-lock.yaml
+
+# Archives / misc
+*.tgz
+*.patch
+*.zip
+*.tar
+
+# Local debug
+*.local
+
+# Prevent committing crash reports
+report.*.json
+
+# Mac specific
+.AppleDouble
+.LSOverride
+
+# Node REPL history
+.node_repl_history
+
+# npm cache
+.npm
+
+# Yarn Integrity file
+/.yarn-integrity
+
+# Temporary
+tmp/
+temp/
