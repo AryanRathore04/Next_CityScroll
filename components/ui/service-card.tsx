@@ -1,11 +1,12 @@
-"use client"
-import { Star, MapPin, Clock } from "lucide-react";
+"use client";
+import { Star, MapPin, Clock, Heart } from "lucide-react";
 import { Badge } from "./badge";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { useState } from "react";
 
 interface ServiceCardProps {
   id: string;
@@ -35,92 +36,114 @@ export function ServiceCard({
   onClick,
 }: ServiceCardProps) {
   const router = useRouter();
+  const [isLiked, setIsLiked] = useState(false);
+
   return (
     <div
       className={cn(
-        "bg-card rounded-lg overflow-hidden sophisticated-shadow hover:card-shadow-hover",
-        "transition-all duration-500 cursor-pointer group hover:scale-[1.02] border border-border",
+        "group cursor-pointer transition-all duration-200 hover:shadow-lg bg-white rounded-lg border border-gray-200 overflow-hidden",
         className,
       )}
-      onClick={
-        onClick || (() => router.push(`/salon/${id}` as Route))
-      }
+      onClick={onClick || (() => router.push(`/salon/${id}` as Route))}
     >
-      <div className="relative overflow-hidden">
+      {/* Image Container - OYO style rectangular */}
+      <div className="relative aspect-[16/10] overflow-hidden">
         <Image
           src={image}
           alt={name}
-          width={800}
-          height={400}
-          className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-700"
+          fill
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
+
+        {/* Heart icon */}
+        <button
+          className={cn(
+            "absolute top-3 right-3 p-1.5 rounded-md transition-all duration-200 bg-white/80 backdrop-blur-sm",
+            isLiked ? "text-coral-500" : "text-gray-600 hover:text-coral-500",
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsLiked(!isLiked);
+          }}
+        >
+          <Heart
+            className={cn("h-4 w-4", isLiked ? "fill-coral-500" : "fill-none")}
+          />
+        </button>
+
+        {/* Status badge */}
         <div className="absolute top-3 left-3">
           <Badge
-            variant={isOpen ? "default" : "secondary"}
             className={cn(
-              "bg-card/90 backdrop-blur-sm text-xs font-body px-2 py-1",
-              isOpen ? "text-primary" : "text-muted-foreground",
+              "text-xs font-medium px-2 py-1 rounded-md",
+              isOpen
+                ? "bg-green-100 text-green-700 border-green-200"
+                : "bg-red-100 text-red-700 border-red-200",
             )}
           >
             <Clock className="h-3 w-3 mr-1" />
             {isOpen ? "Open" : "Closed"}
           </Badge>
         </div>
-        <div className="absolute top-3 right-3">
-          <Badge className="bg-card/90 backdrop-blur-sm text-foreground text-xs font-body px-2 py-1">
+
+        {/* Price badge */}
+        <div className="absolute bottom-3 left-3">
+          <Badge className="bg-coral-500 text-white border-0 text-xs font-semibold px-2 py-1 rounded-md">
             {priceRange}
           </Badge>
         </div>
       </div>
 
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-3">
-          <h3 className="font-heading text-lg text-foreground line-clamp-1">
-            {name}
-          </h3>
-          <div className="flex items-center gap-1 bg-secondary/30 px-2 py-1 rounded-full">
-            <Star className="h-3 w-3 fill-secondary text-secondary" />
-            <span className="text-xs font-body text-foreground">{rating}</span>
-            <span className="text-xs text-muted-foreground">
-              ({reviewCount})
-            </span>
+      {/* Content - OYO style compact layout */}
+      <div className="p-4 space-y-3">
+        {/* Business Name - Prominent */}
+        <h3 className="font-bold text-gray-800 line-clamp-1 text-lg leading-tight">
+          {name}
+        </h3>
+
+        {/* Location & Rating - Inline OYO style */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center text-gray-600 text-sm">
+            <MapPin className="h-3 w-3 mr-1 text-gray-500" />
+            <span className="line-clamp-1">{location}</span>
+          </div>
+
+          <div className="flex items-center gap-1 bg-coral-500 text-white px-2 py-1 rounded-md">
+            <Star className="h-3 w-3 fill-white text-white" />
+            <span className="text-xs font-bold">{rating}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-muted-foreground mb-4">
-          <MapPin className="h-3 w-3" />
-          <span className="text-sm line-clamp-1 font-body">{location}</span>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-5">
+        {/* Services - Compact tags */}
+        <div className="flex flex-wrap gap-1">
           {services.slice(0, 2).map((service, index) => (
-            <Badge
+            <span
               key={index}
-              variant="secondary"
-              className="text-xs font-body bg-muted text-muted-foreground border-0"
+              className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-md font-medium"
             >
               {service}
-            </Badge>
+            </span>
           ))}
           {services.length > 2 && (
-            <Badge
-              variant="outline"
-              className="text-xs font-body border-border text-muted-foreground"
-            >
+            <span className="text-xs text-gray-500 font-medium">
               +{services.length - 2} more
-            </Badge>
+            </span>
           )}
         </div>
 
+        {/* Review count - OYO style */}
+        <div className="text-xs text-gray-500">{reviewCount} reviews</div>
+
+        {/* Book Button - Prominent OYO style */}
         <Button
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 rounded-full font-heading text-sm py-2 transition-colors"
-          size="sm"
+          className="w-full mt-3 bg-coral-500 hover:bg-coral-600 text-white rounded-lg text-sm font-bold py-2.5 border-0 shadow-sm"
           onClick={(e) => {
             e.stopPropagation();
             router.push("/booking" as Route);
           }}
         >
-          Book Appointment
+          Book Now
         </Button>
       </div>
     </div>

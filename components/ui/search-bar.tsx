@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useState } from "react";
 import { Search, MapPin, Crosshair, Loader } from "lucide-react";
 import { Button } from "./button";
@@ -6,6 +6,7 @@ import { Input } from "./input";
 import { LocationService } from "@/utils/location";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
   className?: string;
@@ -38,25 +39,25 @@ export function SearchBar({ className = "", onSearch }: SearchBarProps) {
       const params = new URLSearchParams();
       if (location) params.set("location", location);
       if (service) params.set("service", service);
-      router.push((`/salons?${params.toString()}` as Route));
+      router.push(`/salons?${params.toString()}` as Route);
     }
   };
 
   return (
-    <div className={`relative ${className}`}>
-      <div className="flex flex-col sm:flex-row gap-0 bg-white/95 backdrop-blur-md rounded-full p-1 sophisticated-shadow border border-sage-200 shadow-xl">
+    <div className={cn("relative", className)}>
+      <div className="flex flex-col sm:flex-row gap-0 bg-white/95 backdrop-blur-md rounded-full p-1 airbnb-shadow border border-gray-200 shadow-xl">
         <div className="flex-1 flex items-center gap-3 px-6 py-4">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
+          <MapPin className="h-4 w-4 text-gray-500" />
           <Input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="Your location"
-            className="border-0 bg-transparent placeholder:text-muted-foreground text-foreground focus-visible:ring-0 p-0 font-body"
+            className="border-0 bg-transparent placeholder:text-gray-400 text-gray-700 focus-visible:ring-0 p-0"
           />
           <button
             onClick={handleGetCurrentLocation}
             disabled={isGettingLocation}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="text-gray-500 hover:text-gray-700 transition-colors"
             title="Use current location"
           >
             {isGettingLocation ? (
@@ -66,21 +67,22 @@ export function SearchBar({ className = "", onSearch }: SearchBarProps) {
             )}
           </button>
         </div>
-        <div className="hidden sm:block w-px bg-border my-2"></div>
+        <div className="hidden sm:block w-px bg-gray-300 my-2"></div>
         <div className="flex-1 flex items-center gap-3 px-6 py-4">
-          <Search className="h-4 w-4 text-muted-foreground" />
+          <Search className="h-4 w-4 text-gray-500" />
           <Input
             value={service}
             onChange={(e) => setService(e.target.value)}
             placeholder="Service or treatment"
-            className="border-0 bg-transparent placeholder:text-muted-foreground text-foreground focus-visible:ring-0 p-0 font-body"
+            className="border-0 bg-transparent placeholder:text-gray-400 text-gray-700 focus-visible:ring-0 p-0"
           />
         </div>
         <div className="flex items-center justify-center p-1">
           <Button
             size="lg"
             onClick={handleSearch}
-            className="bg-cta text-cta-foreground rounded-full px-8 py-3 hover:bg-cta/90 transition-all font-heading text-sm h-12 flex items-center justify-center"
+            variant="coral"
+            className="rounded-full px-8 py-3 transition-all font-semibold text-sm h-12 flex items-center justify-center"
           >
             Search
           </Button>

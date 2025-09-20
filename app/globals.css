@@ -1,4 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Source+Sans+Pro:wght@300;400;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Circular:wght@300;400;500;600;700&family=Cereal:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=SF+Pro+Display:wght@300;400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,93 +7,95 @@
 
 @layer base {
   /**
-   * Olive Green Elegant Color Palette
-   * Sophisticated natural color scheme with olive greens and warm accents
-   * HSL values for Tailwind CSS theme compatibility
+   * Airbnb-Inspired Color Palette
+   * Clean, modern color scheme with neutral grays and signature coral accent
+   * Optimized for accessibility and brand consistency
   */
   :root {
-    --background: 70 15% 94%; /* #EEEFE0 */
-    --foreground: 85 40% 20%; /* #3A4B14 - Darker for better contrast */
+    --background: 0 0% 100%; /* #FFFFFF - Pure white background */
+    --foreground: 0 0% 13%; /* #222222 - Airbnb's dark text */
 
-    --card: 70 20% 96%; /* #F2F3E8 */
-    --card-foreground: 85 40% 20%;
+    --card: 0 0% 100%; /* #FFFFFF - White cards */
+    --card-foreground: 0 0% 13%;
 
-    --popover: 90 15% 98%;
-    --popover-foreground: 85 40% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 13%;
 
-    --primary: 85 30% 35%; /* #6B7C32 */
+    /* Brand primary: Royal Green */
+    --primary: 140 100% 13%; /* #004225 Royal Green */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 75 40% 75%; /* #C7D2A3 */
-    --secondary-foreground: 85 40% 20%;
+    --secondary: 0 0% 96%; /* #F7F7F7 - Light gray */
+    --secondary-foreground: 0 0% 13%;
 
-    --muted: 90 15% 94%;
-    --muted-foreground: 85 25% 35%; /* Darker for better readability */
+    --muted: 0 0% 96%; /* #F7F7F7 - Light gray background */
+    --muted-foreground: 0 0% 45%; /* #717171 - Medium gray text */
 
-    --accent: 75 35% 82%; /* #D4DFB8 */
-    --accent-foreground: 85 40% 20%;
+    --accent: 0 0% 96%; /* #F7F7F7 - Light gray accent */
+    --accent-foreground: 0 0% 13%;
 
-    --cta: 65 45% 50%; /* #8FBC32 */
+    --cta: 140 100% 13%; /* Match primary for CTAs */
     --cta-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 60%;
+    --destructive: 0 84% 60%; /* #F53E32 - Error red */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 85 20% 85%;
-    --input: 90 15% 92%;
-    --ring: 85 30% 35%;
+    --border: 0 0% 90%; /* #E5E5E5 - Light border */
+    --input: 0 0% 100%; /* #FFFFFF - White input background */
+    --ring: 140 100% 13%; /* Royal Green focus ring */
 
-    --radius: 0.5rem;
+    --radius: 0.5rem; /* 8px - OYO's minimal border radius */
 
-    --sidebar-background: 90 20% 97%;
-    --sidebar-foreground: 85 30% 25%;
-    --sidebar-primary: 85 30% 35%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 90 15% 92%;
-    --sidebar-accent-foreground: 85 30% 25%;
-    --sidebar-border: 85 20% 85%;
-    --sidebar-ring: 65 45% 50%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 140 100% 13%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 140 100% 13%;
   }
 
   .dark {
-    --background: 85 15% 8%;
-    --foreground: 75 35% 82%;
+    --background: 0 0% 7%; /* #121212 - Dark background */
+    --foreground: 0 0% 98%; /* #FAFAFA - Light text */
 
-    --card: 85 15% 10%;
-    --card-foreground: 75 35% 82%;
+    --card: 0 0% 9%; /* #171717 - Dark card */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 85 15% 10%;
-    --popover-foreground: 75 35% 82%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 85 30% 45%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 140 100% 18%; /* Slightly lighter Royal Green for dark mode */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 85 15% 15%;
-    --secondary-foreground: 75 35% 82%;
+    --secondary: 0 0% 15%; /* #262626 - Dark gray */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 85 15% 12%;
-    --muted-foreground: 85 20% 60%;
+    --muted: 0 0% 15%; /* #262626 - Dark background */
+    --muted-foreground: 0 0% 65%; /* #A6A6A6 - Light gray text */
 
-    --accent: 75 35% 82%;
-    --accent-foreground: 85 15% 10%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
 
-    --cta: 65 45% 60%;
-    --cta-foreground: 0 0% 100%;
+    --cta: 140 100% 18%;
+    --cta-foreground: 0 0% 98%;
 
-    --destructive: 0 60% 55%;
-    --destructive-foreground: 0 0% 95%;
+    --destructive: 0 84% 65%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 85 15% 18%;
-    --input: 85 15% 15%;
-    --ring: 85 30% 45%;
-    --sidebar-background: 85 15% 10%;
-    --sidebar-foreground: 75 35% 82%;
-    --sidebar-primary: 65 45% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 85 15% 15%;
-    --sidebar-accent-foreground: 75 35% 82%;
-    --sidebar-border: 85 15% 18%;
-    --sidebar-ring: 65 45% 70%;
+    --border: 0 0% 20%; /* #333333 - Dark border */
+    --input: 0 0% 15%; /* #262626 - Dark input */
+    --ring: 140 100% 18%;
+
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 140 100% 18%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 140 100% 20%;
   }
 }
 
@@ -103,7 +106,12 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Crimson Text", "Playfair Display", "Times New Roman", serif;
+    font-family: "Inter", "SF Pro Display", system-ui, -apple-system, "Segoe UI",
+      Roboto, sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1,
@@ -112,22 +120,31 @@
   h4,
   h5,
   h6 {
-    font-family: "Playfair Display", "Crimson Text", "Georgia", serif;
+    font-family: "Inter", "SF Pro Display", system-ui, -apple-system, "Segoe UI",
+      Roboto, sans-serif;
     font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
   }
 
   .font-body {
-    font-family: "Source Sans Pro", "Lora", "system-ui", sans-serif;
+    font-family: "Inter", "SF Pro Display", system-ui, -apple-system, "Segoe UI",
+      Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .font-heading {
+    font-family: "Inter", "SF Pro Display", system-ui, -apple-system, "Segoe UI",
+      Roboto, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.025em;
   }
 }
 
 @layer utilities {
+  /* Airbnb-inspired gradient backgrounds */
   .bg-gradient-primary {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--primary)) 0%,
-      hsl(85 35% 40%) 100%
-    );
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, #22c55e 100%);
   }
 
   .bg-gradient-secondary {
@@ -141,196 +158,146 @@
   .bg-gradient-hero {
     background: linear-gradient(
       135deg,
-      hsl(70 15% 94%) 0%,
-      hsl(70 20% 96%) 100%
+      hsl(var(--background)) 0%,
+      hsl(var(--muted)) 100%
     );
   }
 
   .bg-gradient-accent {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--accent)) 0%,
-      hsl(75 30% 85%) 100%
-    );
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, #fafafa 100%);
   }
 
-  .bg-gradient-olive {
-    background: linear-gradient(
-      135deg,
-      hsl(85 30% 35%) 0%,
-      hsl(75 40% 50%) 100%
-    );
+  /* Airbnb-style shadows */
+  .airbnb-shadow-sm {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   }
 
-  .bg-gradient-sage {
-    background: linear-gradient(
-      135deg,
-      hsl(75 35% 85%) 0%,
-      hsl(70 20% 96%) 100%
-    );
+  .airbnb-shadow {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   }
 
+  .airbnb-shadow-lg {
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15), 0 3px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .airbnb-shadow-hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Card shadows (Airbnb style) */
   .card-shadow {
-    box-shadow: 0 4px 24px hsla(0, 0%, 0%, 0.06);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   }
 
   .card-shadow-hover {
-    box-shadow: 0 8px 32px hsla(0, 0%, 0%, 0.1);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .sophisticated-shadow {
-    box-shadow: 0 2px 16px hsla(0, 0%, 0%, 0.04);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   }
 
-  /* Animations */
-  @keyframes float-slow {
-    0%,
-    100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-20px);
-    }
+  /* Search bar shadow */
+  .search-shadow {
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15), 0 3px 8px rgba(0, 0, 0, 0.1);
   }
 
-  @keyframes float-medium {
-    0%,
-    100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-15px);
-    }
-  }
-
-  @keyframes float-fast {
-    0%,
-    100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
-  }
-
-  @keyframes button-merge {
+  /* Airbnb-style smooth animations */
+  @keyframes smooth-scale {
     0% {
-      gap: 1rem;
+      transform: scale(1);
     }
     100% {
-      gap: 0rem;
+      transform: scale(1.03);
     }
   }
 
-  @keyframes glass-effect {
+  @keyframes fade-in-up {
     0% {
-      backdrop-filter: blur(0px);
-      background: rgba(255, 255, 255, 0);
-    }
-    100% {
-      backdrop-filter: blur(12px);
-      background: rgba(255, 255, 255, 0.1);
-    }
-  }
-
-  @keyframes slide-up {
-    from {
       opacity: 0;
-      transform: translateY(30px);
+      transform: translateY(20px);
     }
-    to {
+    100% {
       opacity: 1;
       transform: translateY(0);
     }
   }
 
-  @keyframes gradient-text {
+  @keyframes slide-in-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes gentle-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes smooth-pulse {
     0%,
     100% {
       opacity: 1;
-      background-position: 0% 50%;
     }
     50% {
-      opacity: 0.9;
-      background-position: 100% 50%;
+      opacity: 0.7;
     }
   }
 
-  @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
+  /* Animation utility classes */
+  .animate-smooth-scale {
+    animation: smooth-scale 0.3s ease-out;
   }
 
-  @keyframes glow {
-    0%,
-    100% {
-      box-shadow: 0 0 20px rgba(139, 188, 50, 0.3);
-    }
-    50% {
-      box-shadow: 0 0 30px rgba(139, 188, 50, 0.6);
-    }
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out;
   }
 
-  .animate-float-slow {
-    animation: float-slow 6s ease-in-out infinite;
+  .animate-slide-in-left {
+    animation: slide-in-left 0.5s ease-out;
   }
 
-  .animate-float-medium {
-    animation: float-medium 4s ease-in-out infinite;
+  .animate-slide-in-up {
+    animation: slide-in-up 0.3s ease-out;
   }
 
-  .animate-float-fast {
-    animation: float-fast 3s ease-in-out infinite;
+  .animate-gentle-bounce {
+    animation: gentle-bounce 2s ease-in-out infinite;
   }
 
-  .animate-slide-up {
-    animation: slide-up 0.8s ease-out;
+  .animate-smooth-pulse {
+    animation: smooth-pulse 2s ease-in-out infinite;
   }
 
-  .animate-slide-up-delay {
-    animation: slide-up 0.8s ease-out 0.2s both;
+  /* Hover effects */
+  .hover-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
 
-  .animate-slide-up-delay-2 {
-    animation: slide-up 0.8s ease-out 0.4s both;
-  }
-
-  .animate-slide-up-delay-3 {
-    animation: slide-up 0.8s ease-out 0.6s both;
-  }
-
-  .animate-gradient-text {
-    background-size: 200% 200%;
-    animation: gradient-text 4s ease-in-out infinite;
-  }
-
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.1),
-      transparent
-    );
-    background-size: 200% 100%;
-    animation: shimmer 2s infinite;
-  }
-
-  .animate-glow {
-    animation: glow 2s ease-in-out infinite;
-  }
-
-  .animate-button-merge {
-    animation: button-merge 0.3s ease-out forwards;
-  }
-
-  .glass-navbar {
-    backdrop-filter: blur(12px);
-    background: rgba(238, 239, 224, 0.9);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   /* Loading animations */
