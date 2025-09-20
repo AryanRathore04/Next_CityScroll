@@ -168,7 +168,6 @@ export default function HomePage() {
     <div className="min-h-screen bg-white">
       {/* Navigation Header */}
       <SimpleHeader />
-      
       {/* OYO-style Header with Search */}
       <header className="bg-white shadow-sm">
         {/* Search Section */}

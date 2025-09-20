@@ -36,40 +36,38 @@ export function SimpleHeader({ className }: SimpleHeaderProps) {
             <div className="w-8 h-8 bg-coral-500 rounded-md flex items-center justify-center">
               <span className="text-white font-bold text-lg">B</span>
             </div>
-            <span className="text-xl font-bold text-coral-500">
-              BeautyBook
-            </span>
+            <span className="text-xl font-bold text-coral-500">BeautyBook</span>
           </Link>
 
           {/* Navigation Links - Desktop */}
           <nav className="hidden lg:flex flex-1 justify-center">
             <div className="flex items-center space-x-8">
-              <Link 
-                href="/salons" 
+              <Link
+                href="/salons"
                 className="text-gray-700 hover:text-coral-600 font-medium transition-colors"
               >
                 Find Salons
               </Link>
-              <Link 
-                href="/booking" 
+              <Link
+                href="/booking"
                 className="text-gray-700 hover:text-coral-600 font-medium transition-colors"
               >
                 My Bookings
               </Link>
-              <Link 
-                href="/favorites" 
+              <Link
+                href="/favorites"
                 className="text-gray-700 hover:text-coral-600 font-medium transition-colors"
               >
                 Favorites
               </Link>
-              <Link 
-                href="/about" 
+              <Link
+                href="/about"
                 className="text-gray-700 hover:text-coral-600 font-medium transition-colors"
               >
                 About
               </Link>
-              <Link 
-                href="/signup?type=vendor" 
+              <Link
+                href="/signup?type=vendor"
                 className="text-coral-600 hover:text-coral-700 font-semibold transition-colors"
               >
                 Become a Partner
@@ -169,26 +167,26 @@ export function SimpleHeader({ className }: SimpleHeaderProps) {
         {/* Mobile Navigation Menu */}
         <div className="lg:hidden mt-3 pt-3 border-t border-gray-100">
           <nav className="flex flex-wrap gap-4">
-            <Link 
-              href="/salons" 
+            <Link
+              href="/salons"
               className="text-gray-700 hover:text-coral-600 font-medium transition-colors text-sm"
             >
               Find Salons
             </Link>
-            <Link 
-              href="/booking" 
+            <Link
+              href="/booking"
               className="text-gray-700 hover:text-coral-600 font-medium transition-colors text-sm"
             >
               My Bookings
             </Link>
-            <Link 
-              href="/favorites" 
+            <Link
+              href="/favorites"
               className="text-gray-700 hover:text-coral-600 font-medium transition-colors text-sm"
             >
               Favorites
             </Link>
-            <Link 
-              href="/about" 
+            <Link
+              href="/about"
               className="text-gray-700 hover:text-coral-600 font-medium transition-colors text-sm"
             >
               About

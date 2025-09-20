@@ -1,29 +1,30 @@
 import { NextResponse } from "next/server";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { withRateLimit } from "@/lib/middleware";
+import {
+  registerSchema,
+  validateInput,
+  sanitizeObject,
+} from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+async function registerHandler(request: Request) {
   try {
-    const userData = await request.json();
+    const requestData = await request.json();
+    const sanitizedData = sanitizeObject(requestData);
+
+    // Validate input
+    const validation = validateInput(registerSchema, sanitizedData);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Validation failed", message: validation.error },
+        { status: 400 },
+      );
+    }
+
     const { email, password, userType, firstName, lastName, businessName } =
-      userData;
-
-    if (!email || !password || !userType) {
-      return NextResponse.json(
-        { error: "Email, password, and userType are required" },
-        { status: 400 },
-      );
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
-        { status: 400 },
-      );
-    }
+      validation.data;
 
     // Handle test scenarios
     if (email.includes("test") || email.includes("example.com")) {
@@ -34,8 +35,8 @@ export async function POST(request: Request) {
         uid: `test-${userType}-${Date.now()}`,
         email: email,
         userType: userType,
-        firstName: firstName || "Test",
-        lastName: lastName || "User",
+        firstName: firstName,
+        lastName: lastName,
         businessName: businessName || undefined,
         createdAt: new Date().toISOString(),
         verified: true,
@@ -48,22 +49,23 @@ export async function POST(request: Request) {
       });
     }
 
-    // Actual Firebase registration with timeout
-    const authPromise = createUserWithEmailAndPassword(auth, email, password);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Registration timeout")), 5000),
-    );
+    // Create user with Firebase Admin SDK
+    const userRecord = await adminAuth.createUser({
+      email: email,
+      password: password,
+      emailVerified: false,
+      disabled: false,
+    });
 
-    const userCredential = (await Promise.race([
-      authPromise,
-      timeoutPromise,
-    ])) as any;
-    const user = userCredential.user;
+    // Set custom claims for role-based access
+    await adminAuth.setCustomUserClaims(userRecord.uid, {
+      role: userType,
+    });
 
     // Save user profile to Firestore
     const userProfile = {
-      uid: user.uid,
-      email: user.email,
+      uid: userRecord.uid,
+      email: email,
       userType,
       firstName,
       lastName,
@@ -71,41 +73,49 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       verified: false,
+      status: userType === "vendor" ? "pending_approval" : "active",
     };
 
-    await setDoc(doc(db, "users", user.uid), userProfile);
+    await adminDb.collection("users").doc(userRecord.uid).set(userProfile);
 
+    // Return success without sensitive information
     return NextResponse.json({
       success: true,
-      user: userProfile,
+      user: {
+        uid: userRecord.uid,
+        email: email,
+        userType,
+        firstName,
+        lastName,
+        businessName: userProfile.businessName,
+      },
       message: "Registration successful",
     });
   } catch (error: any) {
     console.error("Registration error:", error);
 
-    let errorMessage = "Registration failed";
+    // Return generic error message to prevent user enumeration
+    let errorMessage = "Registration failed. Please try again.";
     let statusCode = 400;
 
-    if (error.message.includes("timeout")) {
-      errorMessage = "Registration service temporarily unavailable";
-      statusCode = 503;
-    } else if (error.code === "auth/email-already-in-use") {
-      errorMessage = "Email address is already in use";
-      statusCode = 409;
+    // Handle specific Firebase Admin errors
+    if (error.code === "auth/email-already-exists") {
+      errorMessage = "Registration failed. Please try again."; // Don't reveal that email exists
+      statusCode = 400;
     } else if (error.code === "auth/invalid-email") {
-      errorMessage = "Invalid email address";
+      errorMessage = "Invalid request format";
       statusCode = 400;
     } else if (error.code === "auth/weak-password") {
-      errorMessage = "Password is too weak";
+      errorMessage = "Password does not meet requirements";
       statusCode = 400;
+    } else if (error.message.includes("timeout")) {
+      errorMessage = "Service temporarily unavailable";
+      statusCode = 503;
     }
 
-    return NextResponse.json(
-      {
-        error: "Registration failed",
-        message: errorMessage,
-      },
-      { status: statusCode },
-    );
+    return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
 }
+
+// Export with rate limiting
+export const POST = withRateLimit(registerHandler);
