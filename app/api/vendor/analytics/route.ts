@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { connectDB } from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +24,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const bookingsSnap = await getDocs(
-      query(collection(db, "bookings"), where("vendorId", "==", vendorId)),
+    await connectDB();
+    const Booking = (await import("../../../../models/Booking")).default;
+
+    // Get all bookings for this vendor
+    const bookings = await Booking.find({ vendor: vendorId }).populate(
+      "service",
+      "price",
     );
-    const reviewsSnap = await getDocs(
-      query(collection(db, "reviews"), where("vendorId", "==", vendorId)),
-    );
-    const bookings = bookingsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const reviews = reviewsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Calculate analytics
     const totalBookings = bookings.length;
     const pendingBookings = bookings.filter(
       (b: any) => b.status === "pending",
@@ -40,16 +41,18 @@ export async function GET(request: Request) {
     const completedBookings = bookings.filter(
       (b: any) => b.status === "completed",
     ).length;
+
+    // Calculate total revenue from completed bookings
     const totalRevenue = bookings
       .filter((b: any) => b.status === "completed")
-      .reduce((sum: number, b: any) => sum + (b.servicePrice || 0), 0);
-    const averageRating = reviews.length
-      ? Math.round(
-          (reviews.reduce((s: number, r: any) => s + (r.rating || 0), 0) /
-            reviews.length) *
-            10,
-        ) / 10
-      : 0;
+      .reduce((sum: number, b: any) => sum + (b.service?.price || 0), 0);
+
+    // Get vendor's rating and review count (from User model)
+    const User = (await import("../../../../models/User")).default;
+    const vendor = await User.findById(vendorId);
+
+    const averageRating = vendor?.rating || 0;
+    const totalReviews = vendor?.totalReviews || 0;
 
     return NextResponse.json({
       totalBookings,
@@ -57,9 +60,10 @@ export async function GET(request: Request) {
       completedBookings,
       totalRevenue,
       averageRating,
-      totalReviews: reviews.length,
+      totalReviews,
     });
   } catch (error) {
+    console.error("Analytics error:", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }

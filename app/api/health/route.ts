@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, limit } from "firebase/firestore";
+import { connectDB } from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,10 @@ export async function GET() {
     // Database Health Check
     const dbStartTime = Date.now();
     try {
-      await getDocs(query(collection(db, "vendors"), limit(1)));
+      await connectDB();
+      const User = (await import("../../../models/User")).default;
+      await User.findOne({}).limit(1);
+
       checks.push({
         service: "database",
         status: "healthy",
@@ -87,7 +89,15 @@ export async function GET() {
     // Authentication Health Check
     const authStartTime = Date.now();
     try {
-      // Check if auth service is available
+      // Check if auth service is available by testing JWT utilities
+      const jwt = require("jsonwebtoken");
+      const testToken = jwt.sign(
+        { userId: "test" },
+        process.env.JWT_SECRET || "test-secret",
+        { expiresIn: "1m" },
+      );
+      jwt.verify(testToken, process.env.JWT_SECRET || "test-secret");
+
       const authLatency = Date.now() - authStartTime;
       checks.push({
         service: "authentication",

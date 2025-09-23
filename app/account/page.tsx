@@ -81,21 +81,15 @@ export default function AccountPage() {
       <section className="bg-white px-4 py-6 border-b border-gray-100">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-coral-500 rounded-full flex items-center justify-center">
-            {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt="Profile"
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
-              <User className="h-8 w-8 text-white" />
-            )}
+            <User className="h-8 w-8 text-white" />
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-800">
               {userProfile
                 ? `${userProfile.firstName} ${userProfile.lastName}`
-                : user?.displayName || "Guest User"}
+                : user
+                ? `${user.firstName} ${user.lastName}`
+                : "Guest User"}
             </h2>
             <p className="text-sm text-gray-600">
               {user?.email || "Not signed in"}

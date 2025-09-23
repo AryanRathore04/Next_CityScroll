@@ -2,9 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
@@ -50,7 +48,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https: blob:",
-              "connect-src 'self' https://firebaseapp.com https://*.firebaseapp.com https://firestore.googleapis.com https://firebase.googleapis.com wss://ws-*.firebaseio.com https://vercel.live",
+              "connect-src 'self' https://vercel.live",
               "frame-src 'none'",
               "object-src 'none'",
               "base-uri 'self'",

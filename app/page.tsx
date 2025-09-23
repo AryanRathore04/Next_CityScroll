@@ -445,7 +445,9 @@ export default function HomePage() {
                 src="https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=800&h=400&fit=crop"
                 alt="Premium spa services"
                 fill
+                priority
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 1200px"
               />
             </div>
             <div className="relative p-6 text-white">
@@ -484,6 +486,7 @@ export default function HomePage() {
                 alt="Monsoon spa offer"
                 fill
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 1200px"
               />
             </div>
             <div className="relative p-6 text-white">
@@ -555,6 +558,7 @@ export default function HomePage() {
                     alt={item.name}
                     fill
                     className="object-cover"
+                    sizes="(max-width: 640px) 100vw, 200px"
                   />
                 </div>
                 <div className="p-3">

@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "@/lib/firebaseAdmin";
-import { kv } from "@vercel/kv";
+import {
+  verifyAccessToken,
+  extractTokenFromHeader,
+  JWTPayload,
+} from "@/lib/auth";
+import { connectDB } from "@/lib/mongodb";
 
 interface AuthenticatedRequest extends NextRequest {
   user?: {
-    uid: string;
+    id: string;
     email: string;
-    role?: string;
-    customClaims?: any;
+    userType: "customer" | "vendor" | "admin";
+    firstName?: string;
+    lastName?: string;
   };
 }
 
@@ -16,39 +21,7 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 10;
 
 /**
- * Rate limiting middleware using Vercel KV (Redis)
- */
-export async function rateLimit(
-  request: NextRequest,
-  identifier: string,
-): Promise<boolean> {
-  try {
-    const key = `rate_limit:${identifier}`;
-    const now = Date.now();
-    const windowStart = now - RATE_LIMIT_WINDOW;
-
-    // Use Redis sorted set to track requests in time window
-    await kv.zremrangebyscore(key, 0, windowStart);
-    const requestCount = await kv.zcard(key);
-
-    if (requestCount >= MAX_REQUESTS_PER_WINDOW) {
-      return false; // Rate limit exceeded
-    }
-
-    // Add current request
-    await kv.zadd(key, { score: now, member: now.toString() });
-    await kv.expire(key, Math.ceil(RATE_LIMIT_WINDOW / 1000));
-
-    return true; // Request allowed
-  } catch (error) {
-    console.error("Rate limiting error:", error);
-    // If rate limiting fails, allow the request (fail open)
-    return true;
-  }
-}
-
-/**
- * Simple in-memory rate limiting fallback
+ * Simple in-memory rate limiting (fallback when KV is not available)
  */
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
 
@@ -73,26 +46,39 @@ export function rateLimitFallback(identifier: string): boolean {
 }
 
 /**
- * Verify Firebase ID token and extract user information
+ * Verify JWT token and extract user information
  */
 export async function verifyAuth(
   request: NextRequest,
 ): Promise<AuthenticatedRequest["user"] | null> {
   try {
     const authHeader = request.headers.get("authorization");
+    const token = extractTokenFromHeader(authHeader);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!token) {
       return null;
     }
 
-    const idToken = authHeader.substring(7);
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const decodedToken = verifyAccessToken(token);
+    if (!decodedToken) {
+      return null;
+    }
+
+    // Connect to database to get additional user info
+    await connectDB();
+    const User = (await import("../models/User")).default;
+    const user = await User.findById(decodedToken.id).select("-password");
+
+    if (!user) {
+      return null;
+    }
 
     return {
-      uid: decodedToken.uid,
-      email: decodedToken.email || "",
-      role: decodedToken.role || "customer",
-      customClaims: decodedToken,
+      id: user._id.toString(),
+      email: user.email,
+      userType: user.userType,
+      firstName: user.firstName,
+      lastName: user.lastName,
     };
   } catch (error) {
     console.error("Token verification failed:", error);
@@ -132,9 +118,9 @@ export function requireRole(
 ) {
   return requireAuth(
     async (request: AuthenticatedRequest): Promise<NextResponse> => {
-      const userRole = request.user?.role;
+      const userType = request.user?.userType;
 
-      if (userRole !== role) {
+      if (userType !== role) {
         return NextResponse.json(
           { error: "Insufficient permissions" },
           { status: 403 },
@@ -160,14 +146,8 @@ export function withRateLimit(
       : request.headers.get("x-real-ip") || "unknown";
     const identifier = `${ip}:${request.nextUrl.pathname}`;
 
-    // Try KV rate limiting first, fallback to in-memory
-    let allowed: boolean;
-    try {
-      allowed = await rateLimit(request, identifier);
-    } catch (error) {
-      console.warn("KV rate limiting failed, using fallback:", error);
-      allowed = rateLimitFallback(identifier);
-    }
+    // Use in-memory rate limiting (can be upgraded to Redis later)
+    const allowed = rateLimitFallback(identifier);
 
     if (!allowed) {
       return NextResponse.json(

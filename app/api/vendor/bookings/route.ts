@@ -1,13 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
+import { connectDB } from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
 
@@ -60,28 +52,68 @@ export async function GET(request: Request) {
   }
 
   try {
-    let qRef = query(
-      collection(db, "bookings"),
-      where("vendorId", "==", vendorId),
-    );
-    const snap = await getDocs(qRef);
-    let data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    if (status) data = data.filter((b: any) => b.status === status);
-    return NextResponse.json(data);
+    await connectDB();
+    const Booking = (await import("../../../../models/Booking")).default;
+
+    // Build query filter
+    const filter: any = { vendor: vendorId };
+    if (status) {
+      filter.status = status;
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate("customer", "firstName lastName email phone")
+      .populate("service", "name price category duration")
+      .sort({ createdAt: -1 });
+
+    const formattedBookings = bookings.map((booking: any) => ({
+      id: booking._id.toString(),
+      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
+      customerEmail: booking.customer.email,
+      customerPhone: booking.customer.phone,
+      serviceName: booking.service.name,
+      servicePrice: booking.service.price,
+      bookingDate: booking.date,
+      bookingTime: booking.time,
+      status: booking.status,
+      vendorId: booking.vendor.toString(),
+      createdAt: booking.createdAt,
+      updatedAt: booking.updatedAt,
+    }));
+
+    return NextResponse.json(formattedBookings);
   } catch (error) {
+    console.error("Database error:", error);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
-  const body = await request.json();
-  const { id, status } = body || {};
-  if (!id || !status)
+  try {
+    const body = await request.json();
+    const { id, status } = body || {};
+
+    if (!id || !status) {
+      return NextResponse.json(
+        { error: "id and status required" },
+        { status: 400 },
+      );
+    }
+
+    await connectDB();
+    const Booking = (await import("../../../../models/Booking")).default;
+
+    await Booking.findByIdAndUpdate(id, {
+      status,
+      updatedAt: new Date(),
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Update booking error:", error);
     return NextResponse.json(
-      { error: "id and status required" },
-      { status: 400 },
+      { error: "Failed to update booking" },
+      { status: 500 },
     );
-  const ref = doc(db, "bookings", id);
-  await updateDoc(ref, { status, updatedAt: new Date().toISOString() });
-  return NextResponse.json({ ok: true });
+  }
 }

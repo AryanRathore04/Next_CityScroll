@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/middleware";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { connectDB } from "@/lib/mongodb";
 import {
   vendorApprovalSchema,
   validateInput,
@@ -45,16 +45,18 @@ async function vendorApprovalHandler(request: NextRequest) {
       });
     }
 
-    // Get vendor from database
-    const vendorDoc = await adminDb.collection("users").doc(vendorId).get();
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-    if (!vendorDoc.exists) {
+    // Get vendor from database
+    const vendor = await User.findById(vendorId);
+
+    if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
-    const vendorData = vendorDoc.data();
-
-    if (vendorData?.userType !== "vendor") {
+    if (vendor.userType !== "vendor") {
       return NextResponse.json(
         { error: "User is not a vendor" },
         { status: 400 },
@@ -65,25 +67,26 @@ async function vendorApprovalHandler(request: NextRequest) {
     const newStatus = action === "approve" ? "approved" : "rejected";
     const updateData: any = {
       status: newStatus,
-      lastUpdated: new Date().toISOString(),
-      approvedAt: action === "approve" ? new Date().toISOString() : null,
+      updatedAt: new Date(),
     };
+
+    if (action === "approve") {
+      updateData.approvedAt = new Date();
+    }
 
     if (reason) {
       updateData.approvalReason = reason;
     }
 
-    await adminDb.collection("users").doc(vendorId).update(updateData);
+    await User.findByIdAndUpdate(vendorId, updateData);
 
-    // Log the approval action
-    await adminDb.collection("admin_actions").add({
-      type: "vendor_approval",
-      adminUid: (request as any).user?.uid,
-      targetUid: vendorId,
-      action: action,
-      reason: reason,
-      timestamp: new Date().toISOString(),
-    });
+    // Log the approval action (optional - you can create an AdminAction model)
+    // For now, we'll just log to console in production you might want to store this
+    console.log(
+      `Admin ${
+        (request as any).user?.id
+      } ${action}d vendor ${vendorId}. Reason: ${reason || "None"}`,
+    );
 
     return NextResponse.json({
       success: true,
@@ -91,9 +94,9 @@ async function vendorApprovalHandler(request: NextRequest) {
       vendor: {
         id: vendorId,
         status: newStatus,
-        businessName: vendorData.businessName,
-        email: vendorData.email,
-        lastUpdated: updateData.lastUpdated,
+        businessName: vendor.businessName,
+        email: vendor.email,
+        lastUpdated: updateData.updatedAt.toISOString(),
         reason: reason,
       },
     });
@@ -135,32 +138,34 @@ async function getPendingVendorsHandler(request: NextRequest) {
       });
     }
 
-    // Query pending vendors from database
-    const pendingVendorsQuery = await adminDb
-      .collection("users")
-      .where("userType", "==", "vendor")
-      .where("status", "==", "pending_approval")
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-    const pendingVendors = pendingVendorsQuery.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        businessName: data.businessName,
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        submittedDate: data.createdAt,
-        status: data.status,
-      };
-    });
+    // Query pending vendors from database
+    const pendingVendors = await User.find({
+      userType: "vendor",
+      status: "pending_approval",
+    })
+      .select("-password")
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const formattedVendors = pendingVendors.map((vendor: any) => ({
+      id: vendor._id.toString(),
+      businessName: vendor.businessName,
+      email: vendor.email,
+      firstName: vendor.firstName,
+      lastName: vendor.lastName,
+      submittedDate: vendor.createdAt,
+      status: vendor.status,
+    }));
 
     return NextResponse.json({
       success: true,
-      pendingVendors: pendingVendors,
-      total: pendingVendors.length,
+      pendingVendors: formattedVendors,
+      total: formattedVendors.length,
     });
   } catch (error) {
     console.error("Get pending vendors error:", error);

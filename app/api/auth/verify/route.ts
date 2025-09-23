@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { verifyAccessToken, extractTokenFromHeader } from "@/lib/auth";
+import { connectDB } from "@/lib/mongodb";
 import { withRateLimit } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
@@ -7,58 +8,49 @@ export const dynamic = "force-dynamic";
 async function verifyTokenHandler(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
+    const token = extractTokenFromHeader(authHeader);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!token) {
       return NextResponse.json(
         { error: "Authorization header required" },
         { status: 401 },
       );
     }
 
-    const idToken = authHeader.substring(7);
-
-    // Verify the ID token
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
-
-    // Get user profile from Firestore
-    const userDoc = await adminDb
-      .collection("users")
-      .doc(decodedToken.uid)
-      .get();
-    const userProfile = userDoc.data();
-
-    if (!userProfile) {
+    // Verify the access token
+    const decodedToken = verifyAccessToken(token);
+    if (!decodedToken) {
       return NextResponse.json(
-        { error: "User profile not found" },
-        { status: 404 },
+        { error: "Invalid or expired token" },
+        { status: 401 },
       );
+    }
+
+    // Connect to database and get user profile
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
+    const user = await User.findById(decodedToken.id).select("-password");
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Return user information
     return NextResponse.json({
       success: true,
       user: {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        role: decodedToken.role || userProfile.userType || "customer",
-        firstName: userProfile.firstName,
-        lastName: userProfile.lastName,
-        businessName: userProfile.businessName,
-        verified: decodedToken.email_verified,
-        status: userProfile.status,
+        id: user._id.toString(),
+        email: user.email,
+        userType: user.userType,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        businessName: user.businessName,
+        verified: user.verified,
+        status: user.status,
       },
     });
   } catch (error: any) {
     console.error("Token verification error:", error);
-
-    if (error.code === "auth/id-token-expired") {
-      return NextResponse.json({ error: "Token expired" }, { status: 401 });
-    }
-
-    if (error.code === "auth/id-token-revoked") {
-      return NextResponse.json({ error: "Token revoked" }, { status: 401 });
-    }
-
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 }

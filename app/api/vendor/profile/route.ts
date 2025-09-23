@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { connectDB } from "@/lib/mongodb";
 import { requireAuth, requireRole } from "@/lib/middleware";
 import {
   profileUpdateSchema,
@@ -16,14 +16,14 @@ async function getVendorProfileHandler(request: NextRequest) {
   const currentUser = (request as any).user;
 
   // If no vendorId provided, use current user's ID
-  const targetVendorId = vendorId || currentUser?.uid;
+  const targetVendorId = vendorId || currentUser?.id;
 
   if (!targetVendorId) {
     return NextResponse.json({ error: "Vendor ID required" }, { status: 400 });
   }
 
   // Ensure vendors can only access their own profile unless user is admin
-  if (currentUser.role !== "admin" && currentUser.uid !== targetVendorId) {
+  if (currentUser.userType !== "admin" && currentUser.id !== targetVendorId) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
@@ -63,30 +63,40 @@ async function getVendorProfileHandler(request: NextRequest) {
   }
 
   try {
-    const vendorDoc = await adminDb
-      .collection("users")
-      .doc(targetVendorId)
-      .get();
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-    if (!vendorDoc.exists) {
+    const vendor = await User.findById(targetVendorId).select("-password");
+
+    if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
-    const vendorData = vendorDoc.data();
-
-    if (vendorData?.userType !== "vendor") {
+    if (vendor.userType !== "vendor") {
       return NextResponse.json(
         { error: "User is not a vendor" },
         { status: 400 },
       );
     }
 
-    // Remove sensitive information
-    const { password, ...safeVendorData } = vendorData;
-
     return NextResponse.json({
-      id: vendorDoc.id,
-      ...safeVendorData,
+      id: vendor._id.toString(),
+      email: vendor.email,
+      firstName: vendor.firstName,
+      lastName: vendor.lastName,
+      businessName: vendor.businessName,
+      businessType: vendor.businessType,
+      businessAddress: vendor.businessAddress,
+      city: vendor.city,
+      phone: vendor.phone,
+      description: vendor.description,
+      verified: vendor.verified,
+      status: vendor.status,
+      rating: vendor.rating,
+      totalBookings: vendor.totalBookings,
+      createdAt: vendor.createdAt,
+      updatedAt: vendor.updatedAt,
     });
   } catch (error) {
     console.error("Database error:", error);
@@ -104,7 +114,7 @@ async function updateVendorProfileHandler(request: NextRequest) {
     const sanitizedData = sanitizeObject(requestData);
     const currentUser = (request as any).user;
 
-    const vendorId = sanitizedData.vendorId || currentUser?.uid;
+    const vendorId = sanitizedData.vendorId || currentUser?.id;
 
     if (!vendorId) {
       return NextResponse.json(
@@ -114,7 +124,7 @@ async function updateVendorProfileHandler(request: NextRequest) {
     }
 
     // Ensure vendors can only update their own profile
-    if (currentUser.uid !== vendorId) {
+    if (currentUser.id !== vendorId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -142,16 +152,18 @@ async function updateVendorProfileHandler(request: NextRequest) {
       });
     }
 
-    // Verify vendor exists and is actually a vendor
-    const vendorDoc = await adminDb.collection("users").doc(vendorId).get();
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-    if (!vendorDoc.exists) {
+    // Verify vendor exists and is actually a vendor
+    const vendor = await User.findById(vendorId);
+
+    if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
-    const vendorData = vendorDoc.data();
-
-    if (vendorData?.userType !== "vendor") {
+    if (vendor.userType !== "vendor") {
       return NextResponse.json(
         { error: "User is not a vendor" },
         { status: 400 },
@@ -159,13 +171,10 @@ async function updateVendorProfileHandler(request: NextRequest) {
     }
 
     // Update the profile
-    await adminDb
-      .collection("users")
-      .doc(vendorId)
-      .update({
-        ...updateData,
-        updatedAt: new Date().toISOString(),
-      });
+    await User.findByIdAndUpdate(vendorId, {
+      ...updateData,
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json({
       success: true,

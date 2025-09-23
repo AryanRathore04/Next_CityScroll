@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { connectDB } from "@/lib/mongodb";
+import {
+  hashPassword,
+  generateAccessToken,
+  generateRefreshToken,
+  createRefreshTokenCookie,
+} from "@/lib/auth";
 import { withRateLimit } from "@/lib/middleware";
 import {
   registerSchema,
@@ -11,7 +17,18 @@ export const dynamic = "force-dynamic";
 
 async function registerHandler(request: Request) {
   try {
-    const requestData = await request.json();
+    // Read raw body and parse safely to handle PowerShell/curl quoting issues
+    const rawBody = await request.text();
+    let requestData: any = {};
+    try {
+      requestData = rawBody ? JSON.parse(rawBody) : {};
+    } catch (parseError) {
+      console.warn(
+        "[auth/register] Failed to parse JSON body. Raw body:",
+        rawBody,
+      );
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const sanitizedData = sanitizeObject(requestData);
 
     // Validate input
@@ -26,71 +43,75 @@ async function registerHandler(request: Request) {
     const { email, password, userType, firstName, lastName, businessName } =
       validation.data;
 
-    // Handle test scenarios
-    if (email.includes("test") || email.includes("example.com")) {
-      // Simulate successful test registration with minimal delay
-      await new Promise((resolve) => setTimeout(resolve, 50));
+    // No test-user shortcuts here; always persist to the database.
 
-      const testUser = {
-        uid: `test-${userType}-${Date.now()}`,
-        email: email,
-        userType: userType,
-        firstName: firstName,
-        lastName: lastName,
-        businessName: businessName || undefined,
-        createdAt: new Date().toISOString(),
-        verified: true,
-      };
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-      return NextResponse.json({
-        success: true,
-        user: testUser,
-        message: "Registration successful",
-      });
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Registration failed. Please try again." }, // Generic message to prevent enumeration
+        { status: 400 },
+      );
     }
 
-    // Create user with Firebase Admin SDK
-    const userRecord = await adminAuth.createUser({
-      email: email,
-      password: password,
-      emailVerified: false,
-      disabled: false,
-    });
+    // Hash password
+    const hashedPassword = await hashPassword(password);
 
-    // Set custom claims for role-based access
-    await adminAuth.setCustomUserClaims(userRecord.uid, {
-      role: userType,
-    });
-
-    // Save user profile to Firestore
-    const userProfile = {
-      uid: userRecord.uid,
-      email: email,
-      userType,
+    // Create user
+    const newUser = await User.create({
       firstName,
       lastName,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      userType,
       businessName: userType === "vendor" ? businessName : undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
       verified: false,
       status: userType === "vendor" ? "pending_approval" : "active",
-    };
+    });
 
-    await adminDb.collection("users").doc(userRecord.uid).set(userProfile);
+    // Generate tokens
+    const payload = {
+      id: newUser._id.toString(),
+      email: newUser.email,
+      userType: newUser.userType,
+    };
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+
+    // Save refresh token to user record
+    newUser.refreshToken = refreshToken;
+    await newUser.save();
+
+    // Create HttpOnly cookie for refresh token
+    const refreshCookie = createRefreshTokenCookie(refreshToken);
 
     // Return success without sensitive information
-    return NextResponse.json({
-      success: true,
-      user: {
-        uid: userRecord.uid,
-        email: email,
-        userType,
-        firstName,
-        lastName,
-        businessName: userProfile.businessName,
+    const safeUser = newUser.toSafeObject();
+
+    return NextResponse.json(
+      {
+        success: true,
+        user: {
+          id: safeUser._id,
+          email: safeUser.email,
+          userType: safeUser.userType,
+          firstName: safeUser.firstName,
+          lastName: safeUser.lastName,
+          businessName: safeUser.businessName,
+          status: safeUser.status,
+        },
+        accessToken,
+        message: "Registration successful",
       },
-      message: "Registration successful",
-    });
+      {
+        status: 201,
+        headers: { "Set-Cookie": refreshCookie },
+      },
+    );
   } catch (error: any) {
     console.error("Registration error:", error);
 
@@ -98,15 +119,13 @@ async function registerHandler(request: Request) {
     let errorMessage = "Registration failed. Please try again.";
     let statusCode = 400;
 
-    // Handle specific Firebase Admin errors
-    if (error.code === "auth/email-already-exists") {
+    // Handle specific MongoDB errors
+    if (error.code === 11000) {
+      // Duplicate key error (email already exists)
       errorMessage = "Registration failed. Please try again."; // Don't reveal that email exists
       statusCode = 400;
-    } else if (error.code === "auth/invalid-email") {
+    } else if (error.name === "ValidationError") {
       errorMessage = "Invalid request format";
-      statusCode = 400;
-    } else if (error.code === "auth/weak-password") {
-      errorMessage = "Password does not meet requirements";
       statusCode = 400;
     } else if (error.message.includes("timeout")) {
       errorMessage = "Service temporarily unavailable";

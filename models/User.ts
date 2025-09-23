@@ -1,0 +1,137 @@
+import mongoose, { Schema, Document } from "mongoose";
+
+export interface IUser extends Document {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  password: string; // hashed
+  userType: "customer" | "vendor" | "admin";
+  businessName?: string;
+  businessType?: string;
+  businessAddress?: string;
+  city?: string;
+  verified: boolean;
+  status: "active" | "pending_approval" | "approved" | "rejected" | "suspended";
+  rating?: number;
+  totalBookings?: number;
+  profileImage?: string;
+  description?: string;
+  refreshToken?: string; // store latest refresh token for validation and revocation
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const UserSchema = new Schema<IUser>(
+  {
+    firstName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 50,
+    },
+    lastName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 50,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      maxlength: 100,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      maxlength: 20,
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+    },
+    userType: {
+      type: String,
+      enum: ["customer", "vendor", "admin"],
+      default: "customer",
+    },
+    businessName: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+    },
+    businessType: {
+      type: String,
+      trim: true,
+      maxlength: 50,
+    },
+    businessAddress: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+    },
+    city: {
+      type: String,
+      trim: true,
+      maxlength: 50,
+    },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
+    status: {
+      type: String,
+      enum: ["active", "pending_approval", "approved", "rejected", "suspended"],
+      default: "active",
+    },
+    rating: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: 0,
+    },
+    totalBookings: {
+      type: Number,
+      default: 0,
+    },
+    profileImage: String,
+    description: {
+      type: String,
+      maxlength: 1000,
+    },
+    refreshToken: {
+      type: String,
+      select: false, // exclude from queries by default for security
+    },
+  },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// Index for faster queries
+UserSchema.index({ email: 1 });
+UserSchema.index({ userType: 1 });
+UserSchema.index({ status: 1 });
+UserSchema.index({ city: 1 });
+
+// Virtual for full name
+UserSchema.virtual("fullName").get(function () {
+  return `${this.firstName} ${this.lastName}`;
+});
+
+// Method to get safe user data (without password)
+UserSchema.methods.toSafeObject = function () {
+  const { password, ...safeUser } = this.toObject();
+  return safeUser;
+};
+
+export default mongoose.models.User ||
+  mongoose.model<IUser>("User", UserSchema);

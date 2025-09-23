@@ -1,13 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  limit,
-  where,
-  orderBy,
-} from "firebase/firestore";
+import { connectDB } from "@/lib/mongodb";
 
 export const dynamic = "force-dynamic";
 
@@ -116,26 +108,37 @@ export async function GET() {
       ],
     };
 
-    // Get real data from Firebase where available
+    // Get real data from MongoDB where available
     try {
-      const vendorsSnap = await getDocs(
-        query(collection(db, "vendors"), limit(10)),
-      );
-      const bookingsSnap = await getDocs(
-        query(collection(db, "bookings"), limit(10)),
-      );
+      await connectDB();
+      const User = (await import("../../../../models/User")).default;
+      const Booking = (await import("../../../../models/Booking")).default;
+
+      const vendorCount = await User.countDocuments({ userType: "vendor" });
+      const recentBookingsCount = await Booking.countDocuments({
+        createdAt: { $gte: oneHourAgo },
+      });
+      const totalBookingsCount = await Booking.countDocuments();
 
       metrics.user_activity.push({
         name: "Total Vendors",
-        value: vendorsSnap.size,
+        value: vendorCount,
         unit: "count",
         timestamp: now.toISOString(),
         status: "normal",
       });
 
       metrics.user_activity.push({
-        name: "Recent Bookings",
-        value: bookingsSnap.size,
+        name: "Recent Bookings (1h)",
+        value: recentBookingsCount,
+        unit: "count",
+        timestamp: now.toISOString(),
+        status: "normal",
+      });
+
+      metrics.user_activity.push({
+        name: "Total Bookings",
+        value: totalBookingsCount,
         unit: "count",
         timestamp: now.toISOString(),
         status: "normal",

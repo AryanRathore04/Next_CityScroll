@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { connectDB } from "@/lib/mongodb";
+import {
+  comparePassword,
+  generateAccessToken,
+  generateRefreshToken,
+  createRefreshTokenCookie,
+} from "@/lib/auth";
 import { withRateLimit } from "@/lib/middleware";
 import { signinSchema, validateInput, sanitizeObject } from "@/lib/validation";
 
@@ -7,7 +13,18 @@ export const dynamic = "force-dynamic";
 
 async function signinHandler(request: Request) {
   try {
-    const requestData = await request.json();
+    // Read raw body and parse safely to handle PowerShell/curl quoting issues
+    const rawBody = await request.text();
+    let requestData: any = {};
+    try {
+      requestData = rawBody ? JSON.parse(rawBody) : {};
+    } catch (parseError) {
+      console.warn(
+        "[auth/signin] Failed to parse JSON body. Raw body:",
+        rawBody,
+      );
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
     const sanitizedData = sanitizeObject(requestData);
 
     // Validate input
@@ -19,66 +36,81 @@ async function signinHandler(request: Request) {
       );
     }
 
-    const { email } = validation.data;
+    const { email, password } = validation.data;
 
-    // Handle test scenarios
-    if (email.includes("test") || email.includes("example.com")) {
-      // Simulate successful test login with minimal delay
-      await new Promise((resolve) => setTimeout(resolve, 50));
+    // No test-user shortcuts here; always validate against the database.
 
-      return NextResponse.json({
-        success: true,
-        user: {
-          uid: "test-user-123",
-          email: email,
-          userType: email.includes("vendor")
-            ? "vendor"
-            : email.includes("admin")
-            ? "admin"
-            : "customer",
-          firstName: "Test",
-          lastName: "User",
-        },
-        message: "Sign in successful",
-      });
-    }
+    // Connect to database
+    await connectDB();
+    const User = (await import("../../../../models/User")).default;
 
-    // For real authentication, we need to verify the user exists
-    // Since Firebase Admin doesn't authenticate passwords, we recommend
-    // using client-side authentication and then verifying the ID token here
-    try {
-      const userRecord = await adminAuth.getUserByEmail(email);
-
-      // Get user profile from Firestore
-      const userDoc = await adminDb
-        .collection("users")
-        .doc(userRecord.uid)
-        .get();
-      const userProfile = userDoc.data();
-
-      if (!userProfile) {
-        return NextResponse.json(
-          { error: "Invalid credentials" },
-          { status: 401 },
-        );
-      }
-
-      // Note: In a real application, you should use client-side Firebase Auth
-      // and then verify the ID token on the server. This endpoint is mainly
-      // for demonstration and test scenarios.
-
-      return NextResponse.json({
-        success: true,
-        message: "Please use client-side authentication for security",
-        redirectToClientAuth: true,
-      });
-    } catch (error) {
-      // User not found or other error - return generic message
+    // Find user by email (include refreshToken field for update)
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+refreshToken",
+    );
+    if (!user) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 },
       );
     }
+
+    // Check if user account is active
+    if (user.status === "suspended") {
+      return NextResponse.json(
+        { error: "Account suspended. Please contact support." },
+        { status: 403 },
+      );
+    }
+
+    // Verify password
+    const isPasswordValid = await comparePassword(password, user.password);
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 },
+      );
+    }
+
+    // Generate tokens
+    const payload = {
+      id: user._id.toString(),
+      email: user.email,
+      userType: user.userType,
+    };
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+
+    // Save refresh token to user record
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    // Create HttpOnly cookie for refresh token
+    const refreshCookie = createRefreshTokenCookie(refreshToken);
+
+    // Return success without sensitive information
+    const safeUser = {
+      id: user._id.toString(),
+      email: user.email,
+      userType: user.userType,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      businessName: user.businessName,
+      status: user.status,
+      verified: user.verified,
+    };
+
+    return NextResponse.json(
+      {
+        success: true,
+        user: safeUser,
+        accessToken,
+        message: "Sign in successful",
+      },
+      {
+        headers: { "Set-Cookie": refreshCookie },
+      },
+    );
   } catch (error: any) {
     console.error("Authentication error:", error);
 
