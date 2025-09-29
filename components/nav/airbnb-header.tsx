@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { Menu, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications";
 
 interface AirbnbHeaderProps {
   className?: string;
@@ -86,6 +87,9 @@ export function AirbnbHeader({ className }: AirbnbHeaderProps) {
             >
               Partner with us
             </Button>
+
+            {/* Notifications */}
+            <NotificationBell />
 
             {/* User Menu */}
             <div className="flex items-center border border-gray-300 rounded-lg p-1 hover:shadow-sm transition-shadow">

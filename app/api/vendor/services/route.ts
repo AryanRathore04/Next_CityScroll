@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import { validateInput, sanitizeObject, serviceSchema } from "@/lib/validation";
-import { requireAuth, requireRole } from "@/lib/middleware";
+import {
+  validateInput,
+  sanitizeObject,
+  serviceSchema,
+  sanitizeAndValidate,
+} from "@/lib/validation";
+import { requireAuth, requirePermission } from "@/lib/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
+import { serverLogger as logger } from "@/lib/logger";
+import type { IService } from "../../../../models/Service";
+import type { IUser } from "../../../../models/User";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -39,20 +48,39 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const Service = (await import("../../../../models/Service")).default;
 
-    const services = await Service.find({ vendorId: vendorId });
+    const services = (await Service.find({ vendorId: vendorId }).lean()) as
+      | (Partial<IService> & {
+          _id: string;
+          vendor?: Partial<IUser> | string;
+        })[]
+      | [];
+    // If no services found, return an explicit empty array
+    if (!Array.isArray(services) || services.length === 0) {
+      return NextResponse.json([], { status: 200 });
+    }
 
-    const formattedServices = services.map((service: any) => ({
-      id: service._id.toString(),
-      name: service.name,
-      description: service.description,
-      category: service.category,
-      duration: service.duration,
-      price: service.price,
-      active: service.isActive ?? service.active,
-      vendorId: service.vendorId || service.vendor?.toString(),
-      createdAt: service.createdAt,
-      updatedAt: service.updatedAt,
-    }));
+    const formattedServices = services.map((service) => {
+      const vendorFallback =
+        service.vendorId ||
+        (typeof service.vendor === "string"
+          ? service.vendor
+          : (service.vendor?._id ??
+              (service.vendor ? String(service.vendor) : undefined)) ||
+            vendorId);
+
+      return {
+        id: String(service._id),
+        name: service.name,
+        description: service.description,
+        category: service.category,
+        duration: service.duration,
+        price: service.price,
+        active: service.isActive,
+        vendorId: vendorFallback,
+        createdAt: service.createdAt,
+        updatedAt: service.updatedAt,
+      };
+    });
 
     return NextResponse.json(formattedServices);
   } catch (error) {
@@ -70,18 +98,15 @@ const serviceUpdateSchema = serviceSchema
 async function createServiceHandler(request: NextRequest) {
   try {
     const raw = await request.text();
-    let body: any = {};
+    let bodyObj: Record<string, unknown> = {};
     try {
-      body = raw ? JSON.parse(raw) : {};
+      bodyObj = raw ? JSON.parse(raw) : {};
     } catch {
-      // fallback: parse form values? just return error
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    // sanitize before validation
-    const sanitized = sanitizeObject(body);
-
-    const validation = validateInput(serviceSchema, sanitized);
+    // Use enhanced sanitization and validation
+    const validation = sanitizeAndValidate(serviceSchema, bodyObj);
     if (!validation.success) {
       return NextResponse.json(
         { error: "Invalid input", message: validation.error },
@@ -90,7 +115,7 @@ async function createServiceHandler(request: NextRequest) {
     }
 
     // Use authenticated user's id as vendor id
-    const currentUser = (request as any).user;
+    const currentUser = (request as unknown as { user?: { id: string } }).user;
     const vendorId = currentUser?.id;
     if (!vendorId)
       return NextResponse.json(
@@ -109,7 +134,7 @@ async function createServiceHandler(request: NextRequest) {
       duration: validation.data.duration,
       price: validation.data.price,
       isActive: validation.data.isActive ?? true,
-    });
+    } as Partial<IService>);
 
     return NextResponse.json({ id: created._id.toString(), success: true });
   } catch (error) {
@@ -125,14 +150,14 @@ async function createServiceHandler(request: NextRequest) {
 async function updateServiceHandler(request: NextRequest) {
   try {
     const raw = await request.text();
-    let body: any = {};
+    let bodyObj: Record<string, unknown> = {};
     try {
-      body = raw ? JSON.parse(raw) : {};
+      bodyObj = raw ? JSON.parse(raw) : {};
     } catch {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const sanitized = sanitizeObject(body);
+    const sanitized = sanitizeObject(bodyObj);
     const validation = validateInput(serviceUpdateSchema, sanitized);
     if (!validation.success) {
       return NextResponse.json(
@@ -141,17 +166,21 @@ async function updateServiceHandler(request: NextRequest) {
       );
     }
 
-    const { id, ...updates } = validation.data as any;
+    const { id, ...updates } = validation.data as {
+      id: string;
+    } & Partial<IService>;
 
     await connectDB();
     const Service = (await import("../../../../models/Service")).default;
 
     // Ensure service belongs to current vendor
-    const existing = await Service.findById(id).lean();
+    const existing = (await Service.findById(
+      id,
+    ).lean()) as Partial<IService> | null;
     if (!existing)
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
 
-    const currentUser = (request as any).user;
+    const currentUser = (request as unknown as { user?: { id: string } }).user;
     if (existing.vendorId?.toString() !== currentUser?.id) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
@@ -178,11 +207,13 @@ async function deleteServiceHandler(request: NextRequest) {
     await connectDB();
     const Service = (await import("../../../../models/Service")).default;
 
-    const existing = await Service.findById(id).lean();
+    const existing = (await Service.findById(
+      id,
+    ).lean()) as Partial<IService> | null;
     if (!existing)
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
 
-    const currentUser = (request as any).user;
+    const currentUser = (request as unknown as { user?: { id: string } }).user;
     if (existing.vendorId?.toString() !== currentUser?.id) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
@@ -198,7 +229,16 @@ async function deleteServiceHandler(request: NextRequest) {
   }
 }
 
-// Export protected handlers for POST/PUT/DELETE
-export const POST = requireRole("vendor", createServiceHandler as any);
-export const PUT = requireRole("vendor", updateServiceHandler as any);
-export const DELETE = requireRole("vendor", deleteServiceHandler as any);
+// Export protected handlers for POST/PUT/DELETE using new permission system
+export const POST = requirePermission(
+  PERMISSIONS.MANAGE_OWN_SERVICES,
+  createServiceHandler,
+);
+export const PUT = requirePermission(
+  PERMISSIONS.MANAGE_OWN_SERVICES,
+  updateServiceHandler,
+);
+export const DELETE = requirePermission(
+  PERMISSIONS.MANAGE_OWN_SERVICES,
+  deleteServiceHandler,
+);

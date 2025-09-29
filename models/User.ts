@@ -10,8 +10,22 @@ export interface IUser extends Document {
   userType: "customer" | "vendor" | "admin";
   businessName?: string;
   businessType?: string;
-  businessAddress?: string;
-  city?: string;
+  businessAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+  location?: {
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
   verified: boolean;
   status: "active" | "pending_approval" | "approved" | "rejected" | "suspended";
   rating?: number;
@@ -71,14 +85,20 @@ const UserSchema = new Schema<IUser>(
       maxlength: 50,
     },
     businessAddress: {
-      type: String,
-      trim: true,
-      maxlength: 200,
+      street: { type: String, trim: true, maxlength: 200 },
+      city: { type: String, trim: true, maxlength: 50 },
+      state: { type: String, trim: true, maxlength: 50 },
+      zipCode: { type: String, trim: true, maxlength: 10 },
+      coordinates: {
+        latitude: { type: Number },
+        longitude: { type: Number },
+      },
     },
-    city: {
-      type: String,
-      trim: true,
-      maxlength: 50,
+    location: {
+      coordinates: {
+        latitude: { type: Number },
+        longitude: { type: Number },
+      },
     },
     verified: {
       type: Boolean,
@@ -116,11 +136,15 @@ const UserSchema = new Schema<IUser>(
   },
 );
 
-// Index for faster queries
-UserSchema.index({ email: 1 });
-UserSchema.index({ userType: 1 });
-UserSchema.index({ status: 1 });
-UserSchema.index({ city: 1 });
+// Enhanced indexes for better query performance
+UserSchema.index({ email: 1, userType: 1 }); // Compound for auth queries
+UserSchema.index({ userType: 1, status: 1 }); // Compound for filtering active vendors/customers
+UserSchema.index({ "businessAddress.city": 1, userType: 1, status: 1 }); // Location-based vendor search
+UserSchema.index({ "businessAddress.coordinates": "2dsphere" }); // Geospatial index for location queries
+UserSchema.index({ status: 1 }); // Quick status filtering
+UserSchema.index({ createdAt: -1 }); // Recent users
+UserSchema.index({ rating: -1 }); // Top-rated vendors
+UserSchema.index({ businessName: "text", firstName: "text", lastName: "text" }); // Text search
 
 // Virtual for full name
 UserSchema.virtual("fullName").get(function () {

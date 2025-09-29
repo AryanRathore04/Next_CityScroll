@@ -39,7 +39,7 @@ export function verifyAccessToken(token: string): JWTPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as JWTPayload;
   } catch (error) {
-    console.error("Access token verification failed:", error);
+    // Don't log token verification failures as they're common (expired tokens)
     return null;
   }
 }
@@ -49,7 +49,7 @@ export function verifyRefreshToken(token: string): JWTPayload | null {
   try {
     return jwt.verify(token, JWT_REFRESH_SECRET) as JWTPayload;
   } catch (error) {
-    console.error("Refresh token verification failed:", error);
+    // Don't log refresh token verification failures as they're common
     return null;
   }
 }
@@ -134,6 +134,8 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+import { serverLogger as logger } from "./logger";
+
 export const requireAuth = (
   handler: (req: AuthenticatedRequest) => Promise<Response>,
 ) => {
@@ -172,7 +174,9 @@ export const requireAuth = (
       // Call the protected handler
       return await handler(authenticatedRequest);
     } catch (error) {
-      console.error("Auth middleware error:", error);
+      logger.error("Auth middleware error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return new Response(JSON.stringify({ error: "Authentication failed" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },

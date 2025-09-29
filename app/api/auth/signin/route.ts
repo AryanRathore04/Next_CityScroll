@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth";
 import { withRateLimit } from "@/lib/middleware";
 import { signinSchema, validateInput, sanitizeObject } from "@/lib/validation";
+import { serverLogger as logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -19,10 +20,7 @@ async function signinHandler(request: Request) {
     try {
       requestData = rawBody ? JSON.parse(rawBody) : {};
     } catch (parseError) {
-      console.warn(
-        "[auth/signin] Failed to parse JSON body. Raw body:",
-        rawBody,
-      );
+      logger.warn("Failed to parse JSON body in signin", { rawBody });
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     const sanitizedData = sanitizeObject(requestData);
@@ -112,7 +110,9 @@ async function signinHandler(request: Request) {
       },
     );
   } catch (error: any) {
-    console.error("Authentication error:", error);
+    logger.error("Authentication error", {
+      error: error instanceof Error ? error.message : String(error),
+    });
 
     // Return generic error message to prevent user enumeration
     return NextResponse.json(

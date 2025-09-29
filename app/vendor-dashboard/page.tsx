@@ -81,12 +81,21 @@ export default function VendorDashboardPage() {
 
   useEffect(() => {
     loadVendorData();
-  }, []);
+  }, [user]); // Reload when user changes
 
   const loadVendorData = async () => {
     try {
       setIsLoading(true);
-      const uid = user?.id || "demo-vendor";
+
+      // Wait for user to be loaded if not ready yet
+      if (!user?.id) {
+        console.log("User not ready yet, waiting...");
+        setIsLoading(false);
+        return;
+      }
+
+      const uid = user.id;
+      console.log("Loading vendor data for user:", uid);
       const profile = await vendorService.getVendorProfile(uid);
       setVendorProfile(profile);
       if (profile) {
@@ -106,59 +115,126 @@ export default function VendorDashboardPage() {
       setBookings(vendorBookings);
       const analyticsData = await vendorService.getVendorAnalytics(uid);
       setAnalytics(analyticsData);
+    } catch (error) {
+      console.error("Error loading vendor data:", error);
+      // If it's an authentication error, redirect to signin
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage.includes("Failed to fetch") ||
+        errorMessage.includes("401")
+      ) {
+        console.log("Authentication error, redirecting to signin");
+        router.push("/signin" as Route);
+        return;
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUpdateProfile = async () => {
-    const uid = user?.id || "demo-vendor";
-    await vendorService.updateVendorProfile(uid, {
-      ...profileForm,
-      uid,
-      email: vendorProfile?.email || "",
-    } as any);
-    await loadVendorData();
+    try {
+      const uid = user?.id || "demo-vendor";
+      console.log("Updating profile for user:", uid);
+
+      await vendorService.updateVendorProfile(uid, {
+        ...profileForm,
+        uid,
+        email: vendorProfile?.email || "",
+      } as any);
+
+      console.log("Profile updated successfully");
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to update profile: ${errorMessage}`);
+    }
   };
 
   const handleServiceSubmit = async () => {
-    if (editingService) {
-      await vendorService.updateService(editingService.id!, serviceForm);
-    } else {
-      await vendorService.addService({
-        ...serviceForm,
-        vendorId: vendorProfile?.id || "demo-vendor",
+    try {
+      console.log("Submitting service:", serviceForm);
+
+      if (editingService) {
+        await vendorService.updateService(editingService.id!, serviceForm);
+        console.log("Service updated successfully");
+      } else {
+        const result = await vendorService.addService({
+          ...serviceForm,
+          vendorId: vendorProfile?.id || user?.id || "demo-vendor",
+        });
+        console.log("Service created successfully:", result);
+      }
+
+      setIsServiceDialogOpen(false);
+      setEditingService(null);
+      setServiceForm({
+        name: "",
+        description: "",
+        category: "",
+        duration: 30,
+        price: 0,
+        active: true,
       });
+
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error submitting service:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(
+        `Failed to ${
+          editingService ? "update" : "create"
+        } service: ${errorMessage}`,
+      );
     }
-    setIsServiceDialogOpen(false);
-    setEditingService(null);
-    setServiceForm({
-      name: "",
-      description: "",
-      category: "",
-      duration: 30,
-      price: 0,
-      active: true,
-    });
-    await loadVendorData();
   };
 
   const handleDeleteService = async (serviceId: string) => {
-    await vendorService.deleteService(serviceId);
-    await loadVendorData();
+    try {
+      console.log("Deleting service:", serviceId);
+      await vendorService.deleteService(serviceId);
+      console.log("Service deleted successfully");
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to delete service: ${errorMessage}`);
+    }
   };
 
   const handleUpdateBookingStatus = async (
     bookingId: string,
     status: Booking["status"],
   ) => {
-    await vendorService.updateBookingStatus(bookingId, status);
-    await loadVendorData();
+    try {
+      console.log("Updating booking status:", bookingId, "to", status);
+      await vendorService.updateBookingStatus(bookingId, status);
+      console.log("Booking status updated successfully");
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error updating booking status:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to update booking status: ${errorMessage}`);
+    }
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    router.push("/" as Route);
+    try {
+      console.log("Signing out user");
+      await signOut();
+      router.push("/" as Route);
+    } catch (error) {
+      console.error("Error signing out:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to sign out: ${errorMessage}`);
+    }
   };
 
   if (isLoading) {
@@ -199,7 +275,10 @@ export default function VendorDashboardPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to Site
               </Button>
-              <Button variant="ghost" onClick={handleSignOut}>
+              <Button
+                variant="ghost"
+                onClick={async () => await handleSignOut()}
+              >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
               </Button>
@@ -385,8 +464,8 @@ export default function VendorDashboardPage() {
                             <div className="flex gap-1">
                               <Button
                                 size="sm"
-                                onClick={() =>
-                                  handleUpdateBookingStatus(
+                                onClick={async () =>
+                                  await handleUpdateBookingStatus(
                                     booking.id!,
                                     "confirmed",
                                   )
@@ -398,8 +477,8 @@ export default function VendorDashboardPage() {
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() =>
-                                  handleUpdateBookingStatus(
+                                onClick={async () =>
+                                  await handleUpdateBookingStatus(
                                     booking.id!,
                                     "cancelled",
                                   )
@@ -412,8 +491,8 @@ export default function VendorDashboardPage() {
                           {booking.status === "confirmed" && (
                             <Button
                               size="sm"
-                              onClick={() =>
-                                handleUpdateBookingStatus(
+                              onClick={async () =>
+                                await handleUpdateBookingStatus(
                                   booking.id!,
                                   "completed",
                                 )
@@ -549,7 +628,7 @@ export default function VendorDashboardPage() {
                         </div>
                         <div className="flex gap-2">
                           <Button
-                            onClick={handleServiceSubmit}
+                            onClick={async () => await handleServiceSubmit()}
                             className="flex-1"
                           >
                             {editingService ? "Update" : "Add"} Service
@@ -630,7 +709,9 @@ export default function VendorDashboardPage() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => handleDeleteService(service.id!)}
+                          onClick={async () =>
+                            await handleDeleteService(service.id!)
+                          }
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -650,9 +731,9 @@ export default function VendorDashboardPage() {
                 </div>
                 <div className="bg-card p-6 rounded-lg border border-border">
                   <form
-                    onSubmit={(e) => {
+                    onSubmit={async (e) => {
                       e.preventDefault();
-                      handleUpdateProfile();
+                      await handleUpdateProfile();
                     }}
                     className="space-y-6"
                   >

@@ -5,7 +5,10 @@ export interface IBooking extends Document {
   customerId: string;
   vendorId: string;
   serviceId: string;
+  staffId?: string; // Optional staff member assigned to booking
+  staffPreference?: "any" | "specific";
   datetime: Date;
+  duration: number; // Duration in minutes (copied from service)
   status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
   totalPrice: number;
   notes?: string;
@@ -13,6 +16,7 @@ export interface IBooking extends Document {
   vendorNotes?: string;
   paymentStatus: "pending" | "paid" | "refunded";
   paymentMethod?: string;
+  reminderSent?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,9 +38,24 @@ const BookingSchema = new Schema<IBooking>(
       required: true,
       ref: "Service",
     },
+    staffId: {
+      type: String,
+      ref: "Staff",
+      sparse: true, // Allow multiple null values
+    },
+    staffPreference: {
+      type: String,
+      enum: ["any", "specific"],
+      default: "any",
+    },
     datetime: {
       type: Date,
       required: true,
+    },
+    duration: {
+      type: Number,
+      required: true,
+      min: 15, // Minimum 15 minutes
     },
     status: {
       type: String,
@@ -69,6 +88,10 @@ const BookingSchema = new Schema<IBooking>(
       type: String,
       maxlength: 50,
     },
+    reminderSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -77,17 +100,26 @@ const BookingSchema = new Schema<IBooking>(
   },
 );
 
-// Indexes for faster queries
-BookingSchema.index({ customerId: 1 });
-BookingSchema.index({ vendorId: 1 });
-BookingSchema.index({ serviceId: 1 });
-BookingSchema.index({ datetime: 1 });
-BookingSchema.index({ status: 1 });
-BookingSchema.index({ paymentStatus: 1 });
-
-// Compound indexes for common queries
-BookingSchema.index({ vendorId: 1, datetime: 1 });
-BookingSchema.index({ customerId: 1, status: 1 });
+// Enhanced indexes for optimal query performance
+BookingSchema.index({ customerId: 1, status: 1, datetime: -1 }); // Customer booking history
+BookingSchema.index({ vendorId: 1, datetime: 1 }); // Vendor schedule view
+BookingSchema.index({ vendorId: 1, status: 1, datetime: -1 }); // Vendor booking management
+BookingSchema.index({ serviceId: 1, datetime: 1 }); // Service popularity analytics
+BookingSchema.index({ datetime: 1, status: 1 }); // Daily booking reports
+BookingSchema.index({ paymentStatus: 1, status: 1 }); // Payment reconciliation
+BookingSchema.index({ status: 1, createdAt: -1 }); // Recent bookings by status
+BookingSchema.index(
+  {
+    vendorId: 1,
+    datetime: 1,
+    status: 1,
+  },
+  {
+    partialFilterExpression: {
+      status: { $in: ["pending", "confirmed"] },
+    },
+  },
+); // Active bookings for availability calculation
 
 // Virtual to populate customer info
 BookingSchema.virtual("customer", {

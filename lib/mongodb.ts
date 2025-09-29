@@ -16,8 +16,11 @@ if (!cached) {
   cached = (global as any).mongoose = { conn: null, promise: null };
 }
 
-console.log("MongoDB state:", mongoose.connection.readyState);
+import { serverLogger as logger } from "./logger";
 
+logger.debug("MongoDB connection state", {
+  readyState: mongoose.connection.readyState,
+});
 
 export async function connectDB() {
   if (cached.conn) {
@@ -30,7 +33,7 @@ export async function connectDB() {
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      console.log("✅ MongoDB connected successfully");
+      logger.info("MongoDB connected successfully");
       return mongoose;
     });
   }

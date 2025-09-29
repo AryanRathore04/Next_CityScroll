@@ -73,11 +73,14 @@ const ServiceSchema = new Schema<IService>(
   },
 );
 
-// Indexes for faster queries
-ServiceSchema.index({ vendorId: 1 });
-ServiceSchema.index({ category: 1 });
-ServiceSchema.index({ isActive: 1 });
-ServiceSchema.index({ price: 1 });
+// Enhanced indexes for service discovery and management
+ServiceSchema.index({ vendorId: 1, isActive: 1, category: 1 }); // Vendor service management
+ServiceSchema.index({ category: 1, isActive: 1, price: 1 }); // Category browsing with price sort
+ServiceSchema.index({ isActive: 1, price: 1 }); // Price-based filtering
+ServiceSchema.index({ name: "text", description: "text", category: "text" }); // Text search
+ServiceSchema.index({ vendorId: 1, createdAt: -1 }); // Recent services by vendor
+ServiceSchema.index({ price: 1 }); // Price range queries
+ServiceSchema.index({ duration: 1 }); // Duration-based filtering
 
 // Virtual to populate vendor info
 ServiceSchema.virtual("vendor", {

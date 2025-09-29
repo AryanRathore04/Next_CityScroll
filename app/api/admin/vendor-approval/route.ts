@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/middleware";
+import { requirePermission } from "@/lib/middleware";
 import { connectDB } from "@/lib/mongodb";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   vendorApprovalSchema,
   validateInput,
@@ -177,5 +178,11 @@ async function getPendingVendorsHandler(request: NextRequest) {
 }
 
 // Export with admin role requirement
-export const POST = requireRole("admin", vendorApprovalHandler);
-export const GET = requireRole("admin", getPendingVendorsHandler);
+export const POST = requirePermission(
+  PERMISSIONS.APPROVE_VENDORS,
+  vendorApprovalHandler,
+);
+export const GET = requirePermission(
+  PERMISSIONS.APPROVE_VENDORS,
+  getPendingVendorsHandler,
+);

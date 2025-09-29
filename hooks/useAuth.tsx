@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If refresh fails, just stay logged out (don't throw)
       } catch (error) {
         // Silent failure - user just stays logged out
-        console.log("No valid session found, staying logged out");
+        // Silent failure - user just stays logged out (no logging needed)
       }
     };
 
@@ -150,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         firstName: data.user.firstName,
       };
     } catch (error) {
-      console.error("Sign in error:", error);
+      // Error will be handled by the calling component
       throw normalizeError(error);
     }
   }

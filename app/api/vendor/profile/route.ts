@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import { requireAuth, requireRole } from "@/lib/middleware";
+import { requireAuth, requirePermission } from "@/lib/middleware";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   profileUpdateSchema,
   validateInput,
@@ -191,4 +192,7 @@ async function updateVendorProfileHandler(request: NextRequest) {
 
 // Export with authentication requirements
 export const GET = requireAuth(getVendorProfileHandler);
-export const PUT = requireRole("vendor", updateVendorProfileHandler);
+export const PUT = requirePermission(
+  PERMISSIONS.UPDATE_OWN_PROFILE,
+  updateVendorProfileHandler,
+);
