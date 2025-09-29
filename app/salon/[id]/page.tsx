@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,38 @@ import {
   CheckCircle,
   ArrowRight,
 } from "lucide-react";
+
+interface Review {
+  _id: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  isAnonymous: boolean;
+  customer: {
+    firstName: string;
+    lastName: string;
+    profileImage?: string;
+  } | null;
+  service: {
+    name: string;
+  };
+  vendorResponse?: {
+    message: string;
+    respondedAt: string;
+  };
+}
+
+interface VendorStats {
+  totalReviews: number;
+  averageRating: number;
+  ratingDistribution: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
+}
 
 const services = [
   {
@@ -62,36 +94,6 @@ const services = [
   },
 ];
 
-const reviews = [
-  {
-    id: "1",
-    name: "Priya Sharma",
-    rating: 5,
-    date: "2 weeks ago",
-    text: "Absolutely phenomenal experience. The therapists are incredibly skilled and the atmosphere is so peaceful. I felt completely rejuvenated.",
-    service: "Deep Tissue Massage",
-    verified: true,
-  },
-  {
-    id: "2",
-    name: "Rajesh Kumar",
-    rating: 5,
-    date: "1 month ago",
-    text: "Best spa experience I've had in Delhi. Professional staff, clean facilities, and excellent service. Highly recommend!",
-    service: "Hot Stone Therapy",
-    verified: true,
-  },
-  {
-    id: "3",
-    name: "Anita Patel",
-    rating: 4,
-    date: "3 weeks ago",
-    text: "Very relaxing environment and good service. The aromatherapy session was exactly what I needed after a stressful week.",
-    service: "Aromatherapy Session",
-    verified: true,
-  },
-];
-
 const timeSlots = [
   "9:00 AM",
   "10:00 AM",
@@ -104,11 +106,46 @@ const timeSlots = [
   "6:00 PM",
 ];
 
-export default function VendorProfilePage() {
+export default function VendorProfilePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [vendorStats, setVendorStats] = useState<VendorStats | null>(null);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(true);
+  const [vendorId, setVendorId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Resolve params and fetch vendor data
+  useEffect(() => {
+    const initializeVendor = async () => {
+      try {
+        const resolvedParams = await params;
+        setVendorId(resolvedParams.id);
+
+        // Fetch reviews
+        setIsLoadingReviews(true);
+        const response = await fetch(
+          `/api/reviews?vendorId=${resolvedParams.id}&limit=10&sortBy=createdAt`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setReviews(data.reviews);
+          setVendorStats(data.vendorStats);
+        }
+      } catch (error) {
+        console.error("Failed to fetch vendor data:", error);
+      } finally {
+        setIsLoadingReviews(false);
+      }
+    };
+
+    initializeVendor();
+  }, [params]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -140,8 +177,12 @@ export default function VendorProfilePage() {
               </div>
               <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-2 rounded-full">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-white font-medium">4.9</span>
-                <span className="text-white/80 text-sm">(186 reviews)</span>
+                <span className="text-white font-medium">
+                  {vendorStats?.averageRating || "New"}
+                </span>
+                <span className="text-white/80 text-sm">
+                  ({vendorStats?.totalReviews || 0} reviews)
+                </span>
               </div>
             </div>
           </div>
@@ -229,62 +270,165 @@ export default function VendorProfilePage() {
 
               <TabsContent value="reviews" className="space-y-6">
                 <div>
-                  <h2 className="text-2xl font-semibold text-gray-700 mb-6">
-                    Client Reviews
-                  </h2>
-                  <div className="space-y-6">
-                    {reviews.map((review) => (
-                      <div
-                        key={review.id}
-                        className="bg-white rounded-xl p-6 airbnb-shadow border border-gray-200"
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-                              <span className="text-sm font-medium text-gray-700">
-                                {review.name.charAt(0)}
-                              </span>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-semibold text-gray-700">
+                      Client Reviews
+                    </h2>
+                    {vendorStats && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                          <span className="font-semibold text-lg">
+                            {vendorStats.averageRating}
+                          </span>
+                        </div>
+                        <span className="text-gray-500">
+                          ({vendorStats.totalReviews} reviews)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rating Distribution */}
+                  {vendorStats && (
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                      <div className="grid grid-cols-5 gap-2 text-sm">
+                        {[5, 4, 3, 2, 1].map((rating) => (
+                          <div key={rating} className="flex items-center gap-2">
+                            <span className="w-3">{rating}</span>
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-yellow-400 h-2 rounded-full"
+                                style={{
+                                  width:
+                                    vendorStats.totalReviews > 0
+                                      ? `${
+                                          (vendorStats.ratingDistribution[
+                                            rating as keyof typeof vendorStats.ratingDistribution
+                                          ] /
+                                            vendorStats.totalReviews) *
+                                          100
+                                        }%`
+                                      : "0%",
+                                }}
+                              ></div>
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-700">
-                                  {review.name}
+                            <span className="text-xs text-gray-500 w-6">
+                              {
+                                vendorStats.ratingDistribution[
+                                  rating as keyof typeof vendorStats.ratingDistribution
+                                ]
+                              }
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-6">
+                    {isLoadingReviews ? (
+                      <div className="text-center py-8">
+                        <div className="inline-flex items-center gap-2 text-gray-500">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-coral-500"></div>
+                          Loading reviews...
+                        </div>
+                      </div>
+                    ) : reviews.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <p className="text-lg mb-2">No reviews yet</p>
+                        <p className="text-sm">
+                          Be the first to leave a review after your visit!
+                        </p>
+                      </div>
+                    ) : (
+                      reviews.map((review) => (
+                        <div
+                          key={review._id}
+                          className="bg-white rounded-xl p-6 airbnb-shadow border border-gray-200"
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-coral-100 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-medium text-coral-700">
+                                  {review.isAnonymous || !review.customer
+                                    ? "A"
+                                    : review.customer.firstName
+                                        .charAt(0)
+                                        .toUpperCase()}
                                 </span>
-                                {review.verified && (
-                                  <CheckCircle className="h-4 w-4 text-coral-500" />
-                                )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={`h-3 w-3 ${
-                                        i < review.rating
-                                          ? "fill-yellow-400 text-yellow-400"
-                                          : "text-gray-300"
-                                      }`}
-                                    />
-                                  ))}
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-700">
+                                    {review.isAnonymous || !review.customer
+                                      ? "Anonymous"
+                                      : `${
+                                          review.customer.firstName
+                                        } ${review.customer.lastName.charAt(
+                                          0,
+                                        )}.`}
+                                  </span>
+                                  <CheckCircle className="h-4 w-4 text-coral-500" />
                                 </div>
-                                <span className="text-sm text-gray-500">
-                                  {review.date}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={`h-3 w-3 ${
+                                          i < review.rating
+                                            ? "fill-yellow-400 text-yellow-400"
+                                            : "text-gray-300"
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="text-sm text-gray-500">
+                                    {new Date(
+                                      review.createdAt,
+                                    ).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           </div>
+                          <p className="text-gray-600 leading-relaxed mb-3">
+                            {review.comment}
+                          </p>
+                          <Badge
+                            variant="secondary"
+                            className="bg-gray-100 text-gray-600 mb-3"
+                          >
+                            {review.service.name}
+                          </Badge>
+
+                          {/* Vendor Response */}
+                          {review.vendorResponse && (
+                            <div className="mt-4 bg-gray-50 rounded-lg p-4 border-l-4 border-coral-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-700">
+                                  Response from business
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(
+                                    review.vendorResponse.respondedAt,
+                                  ).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                {review.vendorResponse.message}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-gray-600 leading-relaxed mb-3">
-                          {review.text}
-                        </p>
-                        <Badge
-                          variant="secondary"
-                          className="bg-gray-100 text-gray-600"
-                        >
-                          {review.service}
-                        </Badge>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </TabsContent>

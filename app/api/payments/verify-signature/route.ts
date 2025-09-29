@@ -127,9 +127,89 @@ async function verifyPaymentHandler(request: NextRequest) {
       amount: order.amount,
     });
 
-    // TODO: Send confirmation email/SMS to customer
-    // TODO: Send notification to vendor
-    // TODO: Update vendor earnings
+    // Update vendor earnings and create transaction record
+    try {
+      const Transaction = (await import("../../../../models/Transaction"))
+        .Transaction;
+      const User = (await import("../../../../models/User")).default;
+
+      // Get vendor details
+      const vendor = await User.findById(booking.vendorId);
+      if (!vendor) {
+        logger.warn("Vendor not found for booking", {
+          vendorId: booking.vendorId,
+          bookingId,
+        });
+      } else {
+        // Calculate platform commission (10% of booking price)
+        const platformCommissionRate = 0.1;
+        const totalAmount = booking.totalPrice;
+        const platformCommission = totalAmount * platformCommissionRate;
+        const vendorEarning = totalAmount - platformCommission;
+
+        // Create transaction record
+        const transaction = new Transaction({
+          type: "booking_payment",
+          status: "completed",
+          bookingId: booking._id,
+          customerId: booking.customerId,
+          vendorId: booking.vendorId,
+          amount: totalAmount,
+          platformCommission: platformCommission,
+          vendorAmount: vendorEarning,
+          currency: "INR",
+          paymentMethod: "credit_card", // Razorpay default
+          paymentGateway: "razorpay",
+          gatewayTransactionId: razorpay_payment_id,
+          description: `Payment for booking ${booking._id}`,
+          processedAt: new Date(),
+          createdBy: currentUser.id,
+        });
+
+        await transaction.save();
+
+        logger.info("Transaction record created", {
+          transactionId: transaction.transactionId,
+          vendorEarning,
+          platformCommission,
+          bookingId,
+        });
+      }
+    } catch (transactionError) {
+      logger.error("Failed to create transaction record", {
+        error:
+          transactionError instanceof Error
+            ? transactionError.message
+            : String(transactionError),
+        bookingId,
+        orderId: order._id,
+      });
+      // Don't throw - payment is still successful even if transaction recording fails
+    }
+
+    // Send customer confirmation email
+    try {
+      const { NotificationService } = await import(
+        "../../../../lib/notification-service"
+      );
+      await NotificationService.sendBookingConfirmation(bookingId);
+
+      logger.info("Booking confirmation notifications sent", {
+        bookingId,
+        customerId: currentUser.id,
+        vendorId: booking.vendorId,
+      });
+    } catch (notificationError) {
+      logger.error("Failed to send booking confirmation notifications", {
+        error:
+          notificationError instanceof Error
+            ? notificationError.message
+            : String(notificationError),
+        bookingId,
+        customerId: currentUser.id,
+      });
+      // Don't throw - payment is still successful even if notifications fail
+    }
 
     return NextResponse.json({
       success: true,

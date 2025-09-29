@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +27,7 @@ import {
   Calendar,
   Settings,
   Users,
+  UserCheck,
   Star,
   Plus,
   Edit,
@@ -49,6 +52,7 @@ export default function VendorDashboardPage() {
   );
   const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState({
     totalBookings: 0,
     pendingBookings: 0,
@@ -68,6 +72,61 @@ export default function VendorDashboardPage() {
   });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
+
+  const [staffForm, setStaffForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    specialization: [] as string[],
+    services: [] as string[],
+    schedule: {
+      monday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "18:00",
+        breaks: [],
+      },
+      tuesday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "18:00",
+        breaks: [],
+      },
+      wednesday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "18:00",
+        breaks: [],
+      },
+      thursday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "18:00",
+        breaks: [],
+      },
+      friday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "18:00",
+        breaks: [],
+      },
+      saturday: {
+        isAvailable: true,
+        startTime: "09:00",
+        endTime: "17:00",
+        breaks: [],
+      },
+      sunday: {
+        isAvailable: false,
+        startTime: "09:00",
+        endTime: "17:00",
+        breaks: [],
+      },
+    },
+  });
+  const [editingStaff, setEditingStaff] = useState<any | null>(null);
+  const [isStaffDialogOpen, setIsStaffDialogOpen] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
     businessName: "",
@@ -113,6 +172,22 @@ export default function VendorDashboardPage() {
       setServices(vendorServices);
       const vendorBookings = await vendorService.getVendorBookings(uid);
       setBookings(vendorBookings);
+
+      // Load staff data
+      try {
+        const response = await fetch(`/api/staff?vendorId=${uid}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        });
+        if (response.ok) {
+          const staffData = await response.json();
+          setStaff(staffData.data || []);
+        }
+      } catch (error) {
+        console.error("Error loading staff:", error);
+      }
+
       const analyticsData = await vendorService.getVendorAnalytics(uid);
       setAnalytics(analyticsData);
     } catch (error) {
@@ -207,6 +282,136 @@ export default function VendorDashboardPage() {
     }
   };
 
+  // Staff Management Functions
+  const handleSubmitStaff = async () => {
+    try {
+      const uid = user?.id || "demo-vendor";
+      console.log("Submitting staff:", staffForm);
+
+      if (editingStaff) {
+        const response = await fetch(`/api/staff/${editingStaff._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+          body: JSON.stringify(staffForm),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update staff member");
+        }
+        console.log("Staff member updated successfully");
+      } else {
+        const response = await fetch("/api/staff", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+          body: JSON.stringify({
+            ...staffForm,
+            vendorId: uid,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create staff member");
+        }
+        console.log("Staff member created successfully");
+      }
+
+      setIsStaffDialogOpen(false);
+      setEditingStaff(null);
+      setStaffForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        specialization: [],
+        services: [],
+        schedule: {
+          monday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          tuesday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          wednesday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          thursday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          friday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          saturday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+          sunday: {
+            isAvailable: false,
+            startTime: "09:00",
+            endTime: "17:00",
+            breaks: [],
+          },
+        },
+      });
+
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error submitting staff:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(
+        `Failed to ${
+          editingStaff ? "update" : "create"
+        } staff member: ${errorMessage}`,
+      );
+    }
+  };
+
+  const handleDeleteStaff = async (staffId: string) => {
+    try {
+      console.log("Deleting staff:", staffId);
+      const response = await fetch(`/api/staff/${staffId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete staff member");
+      }
+      console.log("Staff member deleted successfully");
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error deleting staff:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      alert(`Failed to delete staff member: ${errorMessage}`);
+    }
+  };
+
   const handleUpdateBookingStatus = async (
     bookingId: string,
     status: Booking["status"],
@@ -295,6 +500,7 @@ export default function VendorDashboardPage() {
                 { id: "overview", label: "Overview", icon: BarChart3 },
                 { id: "bookings", label: "Bookings", icon: Calendar },
                 { id: "services", label: "Services", icon: Settings },
+                { id: "staff", label: "Staff", icon: UserCheck },
                 { id: "profile", label: "Profile", icon: Users },
               ].map((item) => (
                 <button
@@ -718,6 +924,404 @@ export default function VendorDashboardPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "staff" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-3xl font-heading text-foreground">
+                    Staff Management
+                  </h1>
+                  <Dialog
+                    open={isStaffDialogOpen}
+                    onOpenChange={setIsStaffDialogOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Staff Member
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {editingStaff
+                            ? "Edit Staff Member"
+                            : "Add New Staff Member"}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="firstName">First Name</Label>
+                            <Input
+                              id="firstName"
+                              value={staffForm.firstName}
+                              onChange={(e) =>
+                                setStaffForm({
+                                  ...staffForm,
+                                  firstName: e.target.value,
+                                })
+                              }
+                              placeholder="John"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="lastName">Last Name</Label>
+                            <Input
+                              id="lastName"
+                              value={staffForm.lastName}
+                              onChange={(e) =>
+                                setStaffForm({
+                                  ...staffForm,
+                                  lastName: e.target.value,
+                                })
+                              }
+                              placeholder="Doe"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={staffForm.email}
+                            onChange={(e) =>
+                              setStaffForm({
+                                ...staffForm,
+                                email: e.target.value,
+                              })
+                            }
+                            placeholder="john.doe@example.com"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input
+                            id="phone"
+                            value={staffForm.phone}
+                            onChange={(e) =>
+                              setStaffForm({
+                                ...staffForm,
+                                phone: e.target.value,
+                              })
+                            }
+                            placeholder="+91 9876543210"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="specialization">Specialization</Label>
+                          <Input
+                            id="specialization"
+                            value={staffForm.specialization.join(", ")}
+                            onChange={(e) =>
+                              setStaffForm({
+                                ...staffForm,
+                                specialization: e.target.value
+                                  .split(", ")
+                                  .filter((s) => s.trim()),
+                              })
+                            }
+                            placeholder="Hair Styling, Massage, Facial"
+                          />
+                        </div>
+
+                        <div>
+                          <Label>Weekly Schedule</Label>
+                          <div className="space-y-3 mt-2">
+                            {Object.entries(staffForm.schedule).map(
+                              ([day, schedule]) => (
+                                <div
+                                  key={day}
+                                  className="flex items-center gap-4 p-3 border rounded-lg"
+                                >
+                                  <div className="w-24">
+                                    <Label className="capitalize">{day}</Label>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      checked={schedule.isAvailable}
+                                      onCheckedChange={(checked) =>
+                                        setStaffForm({
+                                          ...staffForm,
+                                          schedule: {
+                                            ...staffForm.schedule,
+                                            [day]: {
+                                              ...schedule,
+                                              isAvailable: checked as boolean,
+                                            },
+                                          },
+                                        })
+                                      }
+                                    />
+                                    <Label>Available</Label>
+                                  </div>
+                                  {schedule.isAvailable && (
+                                    <>
+                                      <Input
+                                        type="time"
+                                        value={schedule.startTime}
+                                        onChange={(e) =>
+                                          setStaffForm({
+                                            ...staffForm,
+                                            schedule: {
+                                              ...staffForm.schedule,
+                                              [day]: {
+                                                ...schedule,
+                                                startTime: e.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className="w-24"
+                                      />
+                                      <span>to</span>
+                                      <Input
+                                        type="time"
+                                        value={schedule.endTime}
+                                        onChange={(e) =>
+                                          setStaffForm({
+                                            ...staffForm,
+                                            schedule: {
+                                              ...staffForm.schedule,
+                                              [day]: {
+                                                ...schedule,
+                                                endTime: e.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        className="w-24"
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={async () => await handleSubmitStaff()}
+                            className="flex-1"
+                          >
+                            {editingStaff ? "Update" : "Add"} Staff Member
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setIsStaffDialogOpen(false);
+                              setEditingStaff(null);
+                              setStaffForm({
+                                firstName: "",
+                                lastName: "",
+                                email: "",
+                                phone: "",
+                                specialization: [],
+                                services: [],
+                                schedule: {
+                                  monday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  tuesday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  wednesday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  thursday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  friday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  saturday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                  sunday: {
+                                    isAvailable: false,
+                                    startTime: "09:00",
+                                    endTime: "17:00",
+                                    breaks: [],
+                                  },
+                                },
+                              });
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {staff.map((member) => (
+                    <div
+                      key={member._id}
+                      className="bg-card p-6 rounded-lg border border-border"
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="font-heading text-foreground">
+                            {member.firstName} {member.lastName}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {member.specialization?.join(", ")}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={member.isActive ? "default" : "secondary"}
+                        >
+                          {member.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+
+                      {member.email && (
+                        <p className="text-sm text-muted-foreground mb-2">
+                          📧 {member.email}
+                        </p>
+                      )}
+                      {member.phone && (
+                        <p className="text-sm text-muted-foreground mb-4">
+                          📞 {member.phone}
+                        </p>
+                      )}
+
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium">
+                          Working Days
+                        </Label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {Object.entries(member.schedule || {}).map(
+                            ([day, schedule]: [string, any]) =>
+                              schedule?.isAvailable && (
+                                <Badge
+                                  key={day}
+                                  variant="outline"
+                                  className="text-xs"
+                                >
+                                  {day.slice(0, 3)}
+                                </Badge>
+                              ),
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingStaff(member);
+                            setStaffForm({
+                              firstName: member.firstName,
+                              lastName: member.lastName,
+                              email: member.email || "",
+                              phone: member.phone || "",
+                              specialization: member.specialization || [],
+                              services: member.services || [],
+                              schedule: member.schedule || {
+                                monday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                tuesday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                wednesday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                thursday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                friday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                saturday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                                sunday: {
+                                  isAvailable: false,
+                                  startTime: "09:00",
+                                  endTime: "17:00",
+                                  breaks: [],
+                                },
+                              },
+                            });
+                            setIsStaffDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={async () =>
+                            await handleDeleteStaff(member._id)
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {staff.length === 0 && (
+                    <div className="col-span-full">
+                      <EmptyState
+                        icon={UserCheck}
+                        title="No Staff Members"
+                        description="Add staff members to manage their schedules and services."
+                        action={{
+                          label: "Add Your First Staff Member",
+                          onClick: () => setIsStaffDialogOpen(true),
+                          icon: Plus,
+                        }}
+                        size="md"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
