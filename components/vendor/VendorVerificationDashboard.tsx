@@ -106,7 +106,11 @@ export function VendorVerificationDashboard() {
   const fetchVerification = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/vendor/verification");
+      const response = await fetch("/api/vendor/verification", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
       const result = await response.json();
 
       if (result.success) {
@@ -141,6 +145,7 @@ export function VendorVerificationDashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
         body: JSON.stringify({
           documentType,

@@ -85,10 +85,10 @@ export function BookingForm({ service, vendor, onBack }: BookingFormProps) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
         body: JSON.stringify({
           serviceId: service._id,
-          vendorId: vendor._id,
           datetime: bookingData.datetime.toISOString(),
           notes: notes.trim() || undefined,
           staffId: bookingData.staffId,

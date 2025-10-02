@@ -146,7 +146,11 @@ export function StaffManagementDashboard() {
 
   const fetchStaff = async () => {
     try {
-      const response = await fetch("/api/staff");
+      const response = await fetch("/api/staff", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
       if (!response.ok) throw new Error("Failed to fetch staff");
 
       const result = await response.json();
@@ -165,7 +169,11 @@ export function StaffManagementDashboard() {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch("/api/vendor/services");
+      const response = await fetch("/api/vendor/services", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
       if (!response.ok) throw new Error("Failed to fetch services");
 
       const result = await response.json();
@@ -221,7 +229,10 @@ export function StaffManagementDashboard() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
         body: JSON.stringify(formData),
       });
 
@@ -271,6 +282,9 @@ export function StaffManagementDashboard() {
     try {
       const response = await fetch(`/api/staff/${staffId}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
       });
 
       const result = await response.json();

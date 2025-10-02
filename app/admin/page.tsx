@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -35,68 +37,27 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Users",
-    value: "25,486",
-    change: "+12.5%",
-    trend: "up",
-    icon: Users,
-  },
-  {
-    title: "Monthly Bookings",
-    value: "5,247",
-    change: "+8.2%",
-    trend: "up",
-    icon: Calendar,
-  },
-  {
-    title: "Revenue",
-    value: "₹12.4L",
-    change: "+15.3%",
-    trend: "up",
-    icon: DollarSign,
-  },
-  {
-    title: "Active Vendors",
-    value: "342",
-    change: "+5.7%",
-    trend: "up",
-    icon: TrendingUp,
-  },
-];
+interface DashboardStats {
+  totalUsers: { value: string; change: string; trend: string };
+  monthlyBookings: { value: string; change: string; trend: string };
+  revenue: { value: string; change: string; trend: string; rawValue: number };
+  activeVendors: { value: string; change: string; trend: string };
+}
 
-const recentBookings = [
-  {
-    id: "BK001",
-    customer: "Priya Sharma",
-    vendor: "Serenity Spa",
-    service: "Deep Tissue Massage",
-    amount: "₹2,500",
-    status: "completed",
-    date: "Today, 2:30 PM",
-  },
-  {
-    id: "BK002",
-    customer: "Rajesh Kumar",
-    vendor: "Zen Beauty Lounge",
-    service: "Facial Treatment",
-    amount: "₹1,800",
-    status: "pending",
-    date: "Today, 1:15 PM",
-  },
-  {
-    id: "BK003",
-    customer: "Anita Patel",
-    vendor: "Natural Glow Studio",
-    service: "Hair Spa",
-    amount: "₹3,200",
-    status: "confirmed",
-    date: "Yesterday, 4:45 PM",
-  },
-];
+interface Booking {
+  id: string;
+  customer: string;
+  vendor: string;
+  service: string;
+  amount: string;
+  rawAmount: number;
+  status: string;
+  date: string;
+  createdAt: string;
+}
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingVendors, setPendingVendors] = useState<any[]>([]);
@@ -107,6 +68,78 @@ export default function AdminDashboardPage() {
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject">(
     "approve",
   );
+
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+
+  // Check admin access
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    const userStr = localStorage.getItem("user");
+
+    if (!token || !userStr) {
+      router.push("/signin" as Route);
+      return;
+    }
+
+    try {
+      const user = JSON.parse(userStr);
+      if (user.userType !== "admin") {
+        router.push("/" as Route);
+        return;
+      }
+    } catch (error) {
+      router.push("/signin" as Route);
+    }
+  }, [router]);
+
+  // Fetch dashboard stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        const response = await fetch("/api/admin/dashboard-stats", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data.stats);
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Fetch recent bookings
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        const response = await fetch("/api/admin/bookings?limit=20", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setRecentBookings(data.bookings || []);
+        }
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+      } finally {
+        setBookingsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []);
 
   // Load pending vendors
   const loadPendingVendors = async () => {
@@ -276,45 +309,73 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <div
-              key={index}
-              className={`rounded-lg p-6 sophisticated-shadow border ${
-                darkMode
-                  ? "bg-spa-charcoal/30 border-white/10"
-                  : "bg-white border-spa-stone/10"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <stat.icon className="h-5 w-5 text-primary" />
-                </div>
-                <Badge
-                  className={`${
-                    stat.trend === "up"
-                      ? "bg-primary/10 text-primary"
-                      : "bg-red-100 text-red-600"
-                  } border-0`}
+          {statsLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`rounded-lg p-6 sophisticated-shadow border animate-pulse ${
+                    darkMode
+                      ? "bg-spa-charcoal/30 border-white/10"
+                      : "bg-white border-spa-stone/10"
+                  }`}
                 >
-                  {stat.change}
-                </Badge>
-              </div>
-              <div
-                className={`text-2xl font-light mb-1 ${
-                  darkMode ? "text-white" : "text-spa-charcoal"
-                }`}
-              >
-                {stat.value}
-              </div>
-              <div
-                className={`text-sm font-light ${
-                  darkMode ? "text-white/60" : "text-spa-charcoal/60"
-                }`}
-              >
-                {stat.title}
-              </div>
-            </div>
-          ))}
+                  <div className="h-20"></div>
+                </div>
+              ))
+            : stats
+            ? [
+                { title: "Total Users", data: stats.totalUsers, icon: Users },
+                {
+                  title: "Monthly Bookings",
+                  data: stats.monthlyBookings,
+                  icon: Calendar,
+                },
+                { title: "Revenue", data: stats.revenue, icon: DollarSign },
+                {
+                  title: "Active Vendors",
+                  data: stats.activeVendors,
+                  icon: TrendingUp,
+                },
+              ].map((stat, index) => (
+                <div
+                  key={index}
+                  className={`rounded-lg p-6 sophisticated-shadow border ${
+                    darkMode
+                      ? "bg-spa-charcoal/30 border-white/10"
+                      : "bg-white border-spa-stone/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <stat.icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <Badge
+                      className={`${
+                        stat.data.trend === "up"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-red-100 text-red-600"
+                      } border-0`}
+                    >
+                      {stat.data.change}
+                    </Badge>
+                  </div>
+                  <div
+                    className={`text-2xl font-light mb-1 ${
+                      darkMode ? "text-white" : "text-spa-charcoal"
+                    }`}
+                  >
+                    {stat.data.value}
+                  </div>
+                  <div
+                    className={`text-sm font-light ${
+                      darkMode ? "text-white/60" : "text-spa-charcoal/60"
+                    }`}
+                  >
+                    {stat.title}
+                  </div>
+                </div>
+              ))
+            : null}
         </div>
 
         <Tabs defaultValue="bookings" className="space-y-6">
@@ -377,94 +438,131 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr
-                      className={`border-b ${
-                        darkMode ? "border-white/10" : "border-spa-stone/10"
-                      }`}
-                    >
-                      {[
-                        "Booking ID",
-                        "Customer",
-                        "Vendor",
-                        "Service",
-                        "Amount",
-                        "Status",
-                        "Actions",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className={`text-left p-4 font-medium text-sm ${
-                            darkMode ? "text-white/80" : "text-spa-charcoal/80"
-                          }`}
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentBookings.map((booking) => (
+                {bookingsLoading ? (
+                  <div className="p-8">
+                    <LoadingEmptyState
+                      title="Loading bookings..."
+                      description="Please wait while we fetch recent bookings."
+                    />
+                  </div>
+                ) : recentBookings.length === 0 ? (
+                  <div className="p-8">
+                    <EmptyState
+                      icon={Calendar}
+                      title="No Bookings Found"
+                      description="There are no bookings matching your criteria."
+                      size="md"
+                    />
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
                       <tr
-                        key={booking.id}
                         className={`border-b ${
-                          darkMode ? "border-white/5" : "border-spa-stone/5"
-                        } hover:bg-spa-stone/5`}
+                          darkMode ? "border-white/10" : "border-spa-stone/10"
+                        }`}
                       >
-                        <td
-                          className={`p-4 font-medium text-sm ${
-                            darkMode ? "text-white" : "text-spa-charcoal"
-                          }`}
-                        >
-                          {booking.id}
-                        </td>
-                        <td
-                          className={`p-4 text-sm ${
-                            darkMode ? "text-white/80" : "text-spa-charcoal/80"
-                          }`}
-                        >
-                          {booking.customer}
-                        </td>
-                        <td
-                          className={`p-4 text-sm ${
-                            darkMode ? "text-white/80" : "text-spa-charcoal/80"
-                          }`}
-                        >
-                          {booking.vendor}
-                        </td>
-                        <td
-                          className={`p-4 text-sm ${
-                            darkMode ? "text-white/80" : "text-spa-charcoal/80"
-                          }`}
-                        >
-                          {booking.service}
-                        </td>
-                        <td
-                          className={`p-4 text-sm font-medium ${
-                            darkMode ? "text-white" : "text-spa-charcoal"
-                          }`}
-                        >
-                          {booking.amount}
-                        </td>
-                        <td className="p-4">
-                          <Badge
-                            className={`${getStatusColor(
-                              booking.status,
-                            )} border-0 font-light`}
+                        {[
+                          "Booking ID",
+                          "Customer",
+                          "Vendor",
+                          "Service",
+                          "Amount",
+                          "Status",
+                          "Actions",
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className={`text-left p-4 font-medium text-sm ${
+                              darkMode
+                                ? "text-white/80"
+                                : "text-spa-charcoal/80"
+                            }`}
                           >
-                            {booking.status}
-                          </Badge>
-                        </td>
-                        <td className="p-4">
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </td>
+                            {h}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {recentBookings
+                        .filter((booking) => {
+                          if (!searchQuery) return true;
+                          const query = searchQuery.toLowerCase();
+                          return (
+                            booking.id.toLowerCase().includes(query) ||
+                            booking.customer.toLowerCase().includes(query) ||
+                            booking.vendor.toLowerCase().includes(query) ||
+                            booking.service.toLowerCase().includes(query)
+                          );
+                        })
+                        .map((booking) => (
+                          <tr
+                            key={booking.id}
+                            className={`border-b ${
+                              darkMode ? "border-white/5" : "border-spa-stone/5"
+                            } hover:bg-spa-stone/5`}
+                          >
+                            <td
+                              className={`p-4 font-medium text-sm ${
+                                darkMode ? "text-white" : "text-spa-charcoal"
+                              }`}
+                            >
+                              {booking.id.substring(0, 8)}
+                            </td>
+                            <td
+                              className={`p-4 text-sm ${
+                                darkMode
+                                  ? "text-white/80"
+                                  : "text-spa-charcoal/80"
+                              }`}
+                            >
+                              {booking.customer}
+                            </td>
+                            <td
+                              className={`p-4 text-sm ${
+                                darkMode
+                                  ? "text-white/80"
+                                  : "text-spa-charcoal/80"
+                              }`}
+                            >
+                              {booking.vendor}
+                            </td>
+                            <td
+                              className={`p-4 text-sm ${
+                                darkMode
+                                  ? "text-white/80"
+                                  : "text-spa-charcoal/80"
+                              }`}
+                            >
+                              {booking.service}
+                            </td>
+                            <td
+                              className={`p-4 text-sm font-medium ${
+                                darkMode ? "text-white" : "text-spa-charcoal"
+                              }`}
+                            >
+                              {booking.amount}
+                            </td>
+                            <td className="p-4">
+                              <Badge
+                                className={`${getStatusColor(
+                                  booking.status,
+                                )} border-0 font-light`}
+                              >
+                                {booking.status}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </TabsContent>

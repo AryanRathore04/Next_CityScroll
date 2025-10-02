@@ -80,7 +80,11 @@ export function BookingCalendar({
 
       setLoadingStaff(true);
       try {
-        const response = await fetch(`/api/staff?vendorId=${vendorId}`);
+        const response = await fetch(`/api/staff?vendorId=${vendorId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        });
         if (!response.ok) throw new Error("Failed to fetch staff");
 
         const result = await response.json();
@@ -126,6 +130,11 @@ export function BookingCalendar({
           // Fetch slots for specific staff member
           const response = await fetch(
             `/api/staff/${selectedStaff}/availability?date=${dateStr}&duration=${service.duration}`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+              },
+            },
           );
           if (!response.ok) throw new Error("Failed to fetch availability");
 
@@ -148,6 +157,13 @@ export function BookingCalendar({
             try {
               const response = await fetch(
                 `/api/staff/${staff._id}/availability?date=${dateStr}&duration=${service.duration}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${localStorage.getItem(
+                      "accessToken",
+                    )}`,
+                  },
+                },
               );
               if (response.ok) {
                 const result = await response.json();

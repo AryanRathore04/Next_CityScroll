@@ -60,7 +60,23 @@ async function verifyPaymentHandler(request: NextRequest) {
       throw new ValidationError("Invalid payment signature");
     }
 
-    await connectDB();
+    // Connect to database with error handling
+    try {
+      await connectDB();
+    } catch (dbError) {
+      logger.error("Database connection failed during payment verification", {
+        error: dbError,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          code: "DATABASE_CONNECTION_ERROR",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 503 },
+      );
+    }
+
     const Order = (await import("../../../../models/Order")).default;
     const Booking = (await import("../../../../models/Booking")).default;
 
@@ -127,14 +143,14 @@ async function verifyPaymentHandler(request: NextRequest) {
       amount: order.amount,
     });
 
-    // Update vendor earnings and create transaction record
+    // Update vendor earnings and create transaction record with idempotency
     try {
       const Transaction = (await import("../../../../models/Transaction"))
         .Transaction;
       const User = (await import("../../../../models/User")).default;
 
       // Get vendor details
-      const vendor = await User.findById(booking.vendorId);
+      const vendor = await User.findById(booking.vendorId).select("-password");
       if (!vendor) {
         logger.warn("Vendor not found for booking", {
           vendorId: booking.vendorId,
@@ -147,32 +163,46 @@ async function verifyPaymentHandler(request: NextRequest) {
         const platformCommission = totalAmount * platformCommissionRate;
         const vendorEarning = totalAmount - platformCommission;
 
-        // Create transaction record
-        const transaction = new Transaction({
-          type: "booking_payment",
-          status: "completed",
-          bookingId: booking._id,
-          customerId: booking.customerId,
-          vendorId: booking.vendorId,
-          amount: totalAmount,
-          platformCommission: platformCommission,
-          vendorAmount: vendorEarning,
-          currency: "INR",
-          paymentMethod: "credit_card", // Razorpay default
-          paymentGateway: "razorpay",
-          gatewayTransactionId: razorpay_payment_id,
-          description: `Payment for booking ${booking._id}`,
-          processedAt: new Date(),
-          createdBy: currentUser.id,
-        });
+        // Create transaction record with idempotency - use findOneAndUpdate with upsert
+        // to prevent duplicate transactions if the request is retried
+        const transaction = await Transaction.findOneAndUpdate(
+          {
+            gatewayTransactionId: razorpay_payment_id,
+            bookingId: booking._id,
+          },
+          {
+            $setOnInsert: {
+              type: "booking_payment",
+              status: "completed",
+              customerId: booking.customerId,
+              vendorId: booking.vendorId,
+              amount: totalAmount,
+              platformCommission: platformCommission,
+              vendorAmount: vendorEarning,
+              currency: "INR",
+              paymentMethod: "credit_card",
+              paymentGateway: "razorpay",
+              gatewayTransactionId: razorpay_payment_id,
+              description: `Payment for booking ${booking._id}`,
+              processedAt: new Date(),
+              createdBy: currentUser.id,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true,
+          },
+        );
 
-        await transaction.save();
-
-        logger.info("Transaction record created", {
+        logger.info("Transaction record created/verified", {
           transactionId: transaction.transactionId,
           vendorEarning,
           platformCommission,
           bookingId,
+          isNew:
+            !transaction.processedAt ||
+            transaction.processedAt.getTime() === new Date().getTime(),
         });
       }
     } catch (transactionError) {

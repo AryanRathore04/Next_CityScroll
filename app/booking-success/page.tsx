@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { clientLogger as logger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/client-error-helpers";
 
 interface BookingDetails {
   id: string;
@@ -78,7 +79,7 @@ function BookingSuccessContent() {
         });
       } catch (error) {
         logger.error("Failed to fetch booking details on success page", {
-          error: error instanceof Error ? error.message : String(error),
+          error: getErrorMessage(error),
           bookingId,
           paymentId,
         });

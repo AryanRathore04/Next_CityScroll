@@ -87,6 +87,11 @@ export const CouponApplication: React.FC<CouponApplicationProps> = ({
         `/api/coupons?customerId=${customerId}&vendorId=${
           bookingDetails.vendorId
         }${serviceCategory ? `&serviceCategory=${serviceCategory}` : ""}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        },
       );
 
       const data = await response.json();
@@ -109,7 +114,10 @@ export const CouponApplication: React.FC<CouponApplicationProps> = ({
       setLoading(true);
       const response = await fetch("/api/coupons/validate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
         body: JSON.stringify({
           couponCode: code,
           customerId,

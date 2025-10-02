@@ -2,6 +2,13 @@ import { connectDB } from "@/lib/mongodb";
 import mongoose from "mongoose";
 import { serverLogger as logger } from "@/lib/logger";
 
+/**
+ * Escape special regex characters to prevent ReDoS attacks
+ */
+function escapeRegex(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export interface GeoLocation {
   latitude: number;
   longitude: number;
@@ -233,9 +240,13 @@ export class GeolocationService {
         });
       }
 
-      // Add city/state/zip filters
+      // Add city/state/zip filters with sanitized regex
       const locationMatch: any = {};
-      if (city) locationMatch["businessAddress.city"] = new RegExp(city, "i");
+      if (city)
+        locationMatch["businessAddress.city"] = new RegExp(
+          escapeRegex(city),
+          "i",
+        );
       if (state) locationMatch["businessAddress.state"] = state;
       if (zipCode) locationMatch["businessAddress.zipCode"] = zipCode;
 

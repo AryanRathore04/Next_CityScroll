@@ -115,7 +115,8 @@ async function updateVendorProfileHandler(request: NextRequest) {
     const sanitizedData = sanitizeObject(requestData);
     const currentUser = (request as any).user;
 
-    const vendorId = sanitizedData.vendorId || currentUser?.id;
+    // ALWAYS use the authenticated user's ID, NEVER accept it from request body
+    const vendorId = currentUser?.id;
 
     if (!vendorId) {
       return NextResponse.json(
@@ -124,9 +125,12 @@ async function updateVendorProfileHandler(request: NextRequest) {
       );
     }
 
-    // Ensure vendors can only update their own profile
-    if (currentUser.id !== vendorId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    // Security: Reject any attempt to pass vendorId in the request body
+    if (sanitizedData.vendorId && sanitizedData.vendorId !== vendorId) {
+      return NextResponse.json(
+        { error: "Cannot update another vendor's profile" },
+        { status: 403 },
+      );
     }
 
     // Validate input
@@ -158,7 +162,7 @@ async function updateVendorProfileHandler(request: NextRequest) {
     const User = (await import("../../../../models/User")).default;
 
     // Verify vendor exists and is actually a vendor
-    const vendor = await User.findById(vendorId);
+    const vendor = await User.findById(vendorId).select("-password");
 
     if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });

@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       user.userType === "admin" ? validatedData.vendorId : user.id;
 
     // Verify vendor exists
-    const vendor = await User.findById(vendorId);
+    const vendor = await User.findById(vendorId).select("-password");
     if (!vendor || vendor.userType !== "vendor") {
       throw new ValidationError("Invalid vendor");
     }

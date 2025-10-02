@@ -51,7 +51,7 @@ async function vendorApprovalHandler(request: NextRequest) {
     const User = (await import("../../../../models/User")).default;
 
     // Get vendor from database
-    const vendor = await User.findById(vendorId);
+    const vendor = await User.findById(vendorId).select("-password");
 
     if (!vendor) {
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });

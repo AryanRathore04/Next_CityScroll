@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
     // Get vendor's rating and review count (from User model)
     const User = (await import("../../../../models/User")).default;
-    const vendor = await User.findById(vendorId);
+    const vendor = await User.findById(vendorId).select("-password");
 
     const averageRating = vendor?.rating || 0;
     const totalReviews = vendor?.totalReviews || 0;

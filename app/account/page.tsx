@@ -23,18 +23,96 @@ import {
   Edit3,
   Star,
   ArrowLeft,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface UserStats {
+  totalBookings: number;
+  completedBookings: number;
+  reviewsReceived: number;
+  rating: number;
+  verified: boolean;
+  memberSince: string;
+  daysSinceMember: number;
+}
 
 export default function AccountPage() {
   const { user, userProfile, signOut } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchUserStats = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch("/api/user/profile", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setStats({
+            totalBookings: data.user.totalBookings || 0,
+            completedBookings: data.user.completedBookings || 0,
+            reviewsReceived: data.user.reviewsReceived || 0,
+            rating: data.user.rating || 0,
+            verified: data.user.verified || false,
+            memberSince: data.user.memberSince,
+            daysSinceMember: data.user.daysSinceMember || 0,
+          });
+        } else {
+          console.warn("Failed to fetch user stats");
+          setStats({
+            totalBookings: 0,
+            completedBookings: 0,
+            reviewsReceived: 0,
+            rating: 0,
+            verified: false,
+            memberSince: new Date().toISOString(),
+            daysSinceMember: 0,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching user stats:", err);
+        setError("Unable to load account details");
+        setStats({
+          totalBookings: 0,
+          completedBookings: 0,
+          reviewsReceived: 0,
+          rating: 0,
+          verified: false,
+          memberSince: new Date().toISOString(),
+          daysSinceMember: 0,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUserStats();
+  }, [user]);
+
+  // Redirect to signin if not authenticated
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/signin" as Route);
+    }
+  }, [isLoading, user, router]);
 
   const handleSignOut = async () => {
     try {
@@ -77,11 +155,28 @@ export default function AccountPage() {
         </div>
       </header>
 
+      {error && (
+        <div className="mx-4 mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+          <div className="flex items-center">
+            <AlertCircle className="h-5 w-5 text-yellow-400 mr-3" />
+            <p className="text-sm text-yellow-700">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* Profile Section */}
       <section className="bg-white px-4 py-6 border-b border-gray-100">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-coral-500 rounded-full flex items-center justify-center">
-            <User className="h-8 w-8 text-white" />
+            {userProfile?.profileImage ? (
+              <img
+                src={userProfile.profileImage}
+                alt="Profile"
+                className="w-full h-full rounded-full object-cover"
+              />
+            ) : (
+              <User className="h-8 w-8 text-white" />
+            )}
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-800">
@@ -94,12 +189,26 @@ export default function AccountPage() {
             <p className="text-sm text-gray-600">
               {user?.email || "Not signed in"}
             </p>
-            <div className="flex items-center gap-2 mt-1">
-              <Star className="h-4 w-4 text-yellow-400 fill-current" />
-              <span className="text-sm text-gray-600">
-                4.9 • Verified member
-              </span>
-            </div>
+            {stats && (
+              <div className="flex items-center gap-2 mt-1">
+                {stats.rating > 0 && (
+                  <>
+                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600">
+                      {stats.rating.toFixed(1)}
+                    </span>
+                  </>
+                )}
+                {stats.verified && (
+                  <span className="text-sm text-gray-600">
+                    {stats.rating > 0 ? "• " : ""}Verified member
+                  </span>
+                )}
+                {!stats.verified && stats.rating === 0 && (
+                  <span className="text-sm text-gray-500">New member</span>
+                )}
+              </div>
+            )}
           </div>
           <Button
             variant="ghost"
@@ -110,6 +219,30 @@ export default function AccountPage() {
             <Edit3 className="h-5 w-5 text-gray-600" />
           </Button>
         </div>
+
+        {/* Stats Section */}
+        {stats && stats.totalBookings > 0 && (
+          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">
+                {stats.totalBookings}
+              </div>
+              <div className="text-xs text-gray-500">Total Bookings</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">
+                {stats.completedBookings}
+              </div>
+              <div className="text-xs text-gray-500">Completed</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-800">
+                {stats.daysSinceMember}
+              </div>
+              <div className="text-xs text-gray-500">Days Active</div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Quick Actions */}

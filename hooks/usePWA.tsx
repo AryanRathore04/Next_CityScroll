@@ -93,24 +93,39 @@ export const usePWA = (): PWAHookResult => {
 
     try {
       await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
 
-      if (outcome === "accepted") {
-        toast({
-          title: "Installing app...",
-          description: "CityScroll is being installed",
-        });
+      // Wrap userChoice in a try-catch as it can reject with an Event object
+      try {
+        const { outcome } = await deferredPrompt.userChoice;
+
+        if (outcome === "accepted") {
+          toast({
+            title: "Installing app...",
+            description: "CityScroll is being installed",
+          });
+        }
+      } catch (userChoiceError) {
+        // User dismissed the prompt - this is expected behavior, not an error
+        console.debug("User dismissed install prompt");
       }
 
       setDeferredPrompt(null);
       setIsInstallable(false);
     } catch (error) {
-      console.error("Error installing app:", error);
-      toast({
-        title: "Installation failed",
-        description: "There was an error installing the app",
-        variant: "destructive",
-      });
+      // Only log actual errors, not user dismissals
+      if (
+        error &&
+        typeof error === "object" &&
+        "name" in error &&
+        error.name !== "AbortError"
+      ) {
+        console.error("Error installing app:", error);
+        toast({
+          title: "Installation failed",
+          description: "There was an error installing the app",
+          variant: "destructive",
+        });
+      }
     }
   };
 

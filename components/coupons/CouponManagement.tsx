@@ -130,6 +130,11 @@ export const CouponManagement: React.FC<{ vendorId?: string }> = ({
       // Load stats
       const statsResponse = await fetch(
         `/api/coupons/stats?${vendorId ? `vendorId=${vendorId}` : ""}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        },
       );
       const statsData = await statsResponse.json();
 
@@ -202,7 +207,10 @@ export const CouponManagement: React.FC<{ vendorId?: string }> = ({
 
       const response = await fetch("/api/coupons", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
         body: JSON.stringify({
           couponData: {
             ...data,

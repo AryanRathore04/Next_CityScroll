@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { PageLoading } from "@/components/ui/loading";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToastNotification, useToasts } from "@/components/ui/toast-notification";
-import { Leaf, Mail, Lock, Eye, EyeOff, User, Phone, MapPin, Building, ArrowRight, ArrowLeft, CheckCircle, Shield, Star, Users } from "lucide-react";
+import { Leaf, Mail, Lock, Eye, EyeOff, User, Phone, MapPin, Building, ArrowRight, ArrowLeft, CheckCircle, Shield, Star, Users, Loader2 } from "lucide-react";
 
 export default function SignUpPage() {
   return (
@@ -23,11 +24,13 @@ export default function SignUpPage() {
 function SignUpInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { signUp } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToasts();
 
   const initialType = useMemo(() => (searchParams.get("type") === "vendor" ? "vendor" : "customer") as "customer" | "vendor", [searchParams]);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [userType, setUserType] = useState<"customer" | "vendor">(initialType);
@@ -66,9 +69,10 @@ function SignUpInner() {
     "Other",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Step 1 for vendors: validate personal info
     if (userType === "vendor" && currentStep === 1) {
       if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword) {
         showError("Please fill in all required fields");
@@ -82,20 +86,67 @@ function SignUpInner() {
       return;
     }
 
+    // Final validation before submission
     if (!formData.agreeTerms) {
       showError("Please agree to the Terms of Service");
       return;
     }
 
-    if (userType === "vendor" && (!formData.businessName || !formData.businessType || !formData.city)) {
-      showError("Please fill in all business information");
-      return;
+    if (userType === "customer") {
+      // Customer validation
+      if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword) {
+        showError("Please fill in all required fields");
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        showError("Passwords do not match");
+        return;
+      }
+    } else {
+      // Vendor validation (step 2)
+      if (!formData.businessName || !formData.businessType || !formData.city) {
+        showError("Please fill in all business information");
+        return;
+      }
     }
 
-    showSuccess(`Welcome to BeautyBook, ${formData.firstName || formData.email}!`);
-    setTimeout(() => {
-      router.push((userType === "vendor" ? "/vendor-dashboard" : "/") as Route);
-    }, 800);
+    // Submit registration
+    setIsSubmitting(true);
+    try {
+      const registrationData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        userType: userType,
+        ...(userType === "vendor" && {
+          businessName: formData.businessName,
+          businessType: formData.businessType,
+          businessAddress: formData.businessAddress,
+          city: formData.city,
+          description: formData.description,
+        }),
+      };
+
+      const profile = await signUp(registrationData);
+      
+      // Show success message
+      if (userType === "vendor") {
+        showSuccess(`Welcome to BeautyBook, ${profile.firstName}! Your account is pending approval.`);
+      } else {
+        showSuccess(`Welcome to BeautyBook, ${profile.firstName}!`);
+      }
+
+      // Redirect to appropriate page
+      setTimeout(() => {
+        router.push((profile.userType === "vendor" ? "/vendor-dashboard" : "/") as Route);
+      }, 1500);
+    } catch (error: any) {
+      showError(error?.message || "Registration failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -262,13 +313,22 @@ function SignUpInner() {
             {/* Actions */}
             <div className="flex gap-3">
               {userType === "vendor" && currentStep === 2 && (
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" disabled={isSubmitting}>
                   Back
                 </Button>
               )}
-              <Button type="submit" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full py-3 font-heading">
-                {userType === "vendor" && currentStep === 1 ? "Continue" : "Create Account"}
-                <ArrowRight className="h-4 w-4 ml-2" />
+              <Button type="submit" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full py-3 font-heading" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {userType === "vendor" && currentStep === 1 ? "Please wait..." : "Creating Account..."}
+                  </>
+                ) : (
+                  <>
+                    {userType === "vendor" && currentStep === 1 ? "Continue" : "Create Account"}
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           </form>

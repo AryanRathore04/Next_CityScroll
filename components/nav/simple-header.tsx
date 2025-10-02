@@ -9,8 +9,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Menu, User } from "lucide-react";
+import { Menu, User, LogOut, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useState } from "react";
 
 interface SimpleHeaderProps {
   className?: string;
@@ -18,6 +20,39 @@ interface SimpleHeaderProps {
 
 export function SimpleHeader({ className }: SimpleHeaderProps) {
   const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      router.push("/" as Route);
+    } catch (error) {
+      console.error("Sign out error:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user) return "";
+    const firstInitial = user.firstName?.charAt(0).toUpperCase() || "";
+    const lastInitial = user.lastName?.charAt(0).toUpperCase() || "";
+    return (
+      firstInitial + lastInitial || user.email?.charAt(0).toUpperCase() || "U"
+    );
+  };
+
+  const getUserDisplayName = () => {
+    if (!user) return "";
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    if (user.firstName) return user.firstName;
+    return user.email?.split("@")[0] || "User";
+  };
 
   return (
     <header
@@ -106,13 +141,68 @@ export function SimpleHeader({ className }: SimpleHeaderProps) {
                   className="w-64 p-0 rounded-lg border border-gray-200 shadow-xl z-50"
                 >
                   <div className="py-2">
-                    <button
-                      onClick={() => router.push("/about" as Route)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
-                    >
-                      Help Centre
-                    </button>
-                    <div className="my-1 border-t border-gray-100" />
+                    {user && (
+                      <>
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <p className="font-semibold text-gray-900">
+                            {getUserDisplayName()}
+                          </p>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                          <p className="text-xs text-coral-600 mt-1 capitalize">
+                            {user.userType} Account
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => router.push("/account" as Route)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700 flex items-center gap-2"
+                        >
+                          <UserCircle className="h-4 w-4" />
+                          My Account
+                        </button>
+                        <button
+                          onClick={() => router.push("/booking" as Route)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                        >
+                          My bookings
+                        </button>
+                        <button
+                          onClick={() => router.push("/favorites" as Route)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                        >
+                          My Favorites
+                        </button>
+                        {user.userType === "vendor" && (
+                          <button
+                            onClick={() =>
+                              router.push("/vendor-dashboard" as Route)
+                            }
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-coral-600 font-medium"
+                          >
+                            Vendor Dashboard
+                          </button>
+                        )}
+                        {user.userType === "admin" && (
+                          <button
+                            onClick={() => router.push("/admin" as Route)}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-coral-600 font-medium"
+                          >
+                            Admin Panel
+                          </button>
+                        )}
+                        <div className="my-1 border-t border-gray-100" />
+                      </>
+                    )}
+                    {!user && (
+                      <>
+                        <button
+                          onClick={() => router.push("/about" as Route)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                        >
+                          Help Centre
+                        </button>
+                        <div className="my-1 border-t border-gray-100" />
+                      </>
+                    )}
                     <button
                       onClick={() =>
                         router.push("/signup?type=vendor" as Route)
@@ -130,35 +220,60 @@ export function SimpleHeader({ className }: SimpleHeaderProps) {
                     >
                       Membership
                     </button>
-                    <button
-                      onClick={() => router.push("/vendor-dashboard" as Route)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
-                    >
-                      Vendor dashboard
-                    </button>
-                    <button
-                      onClick={() => router.push("/booking" as Route)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
-                    >
-                      My bookings
-                    </button>
+                    {!user && (
+                      <button
+                        onClick={() =>
+                          router.push("/vendor-dashboard" as Route)
+                        }
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                      >
+                        Vendor dashboard
+                      </button>
+                    )}
                     <div className="my-1 border-t border-gray-100" />
-                    <button
-                      onClick={() => router.push("/signin" as Route)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700"
-                    >
-                      Log in or sign up
-                    </button>
+                    {user ? (
+                      <button
+                        onClick={handleSignOut}
+                        disabled={isLoggingOut}
+                        className="w-full text-left px-4 py-2 hover:bg-red-50 transition-colors text-sm text-red-600 font-medium flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        {isLoggingOut ? "Logging out..." : "Log out"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => router.push("/signin" as Route)}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm text-gray-700 font-medium"
+                      >
+                        Log in or sign up
+                      </button>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>
               <Button
                 variant="ghost"
                 size="icon"
-                className="w-7 h-7 rounded-md bg-gray-500 ml-1"
-                onClick={() => router.push("/signin" as Route)}
+                className={cn(
+                  "w-7 h-7 rounded-md ml-1 transition-all",
+                  user
+                    ? "bg-coral-500 hover:bg-coral-600"
+                    : "bg-gray-500 hover:bg-gray-600",
+                )}
+                onClick={() =>
+                  router.push(
+                    user ? ("/account" as Route) : ("/signin" as Route),
+                  )
+                }
+                title={user ? getUserDisplayName() : "Sign in"}
               >
-                <User className="h-4 w-4 text-white" />
+                {user ? (
+                  <span className="text-white text-xs font-bold">
+                    {getUserInitials()}
+                  </span>
+                ) : (
+                  <User className="h-4 w-4 text-white" />
+                )}
               </Button>
             </div>
           </div>

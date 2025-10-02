@@ -27,7 +27,23 @@ async function createOrderHandler(request: NextRequest) {
     const { bookingId } = validation.data;
     const currentUser = (request as any).user;
 
-    await connectDB();
+    // Connect to database with error handling
+    try {
+      await connectDB();
+    } catch (dbError) {
+      logger.error("Database connection failed during payment order creation", {
+        error: dbError,
+      });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          code: "DATABASE_CONNECTION_ERROR",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 503 },
+      );
+    }
+
     const Booking = (await import("../../../../models/Booking")).default;
     const Order = (await import("../../../../models/Order")).default;
     const User = (await import("../../../../models/User")).default;
@@ -171,6 +187,7 @@ async function createOrderHandler(request: NextRequest) {
       return NextResponse.json(
         {
           error: error.message,
+          code: error.constructor.name.replace("Error", "").toUpperCase(),
           timestamp: new Date().toISOString(),
         },
         { status: error.statusCode },
@@ -180,6 +197,7 @@ async function createOrderHandler(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to create payment order",
+        code: "INTERNAL_SERVER_ERROR",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

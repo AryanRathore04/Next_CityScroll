@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
+import { getErrorMessage } from "@/lib/client-error-helpers";
 import {
   vendorService,
   type VendorProfile,
@@ -193,8 +194,7 @@ export default function VendorDashboardPage() {
     } catch (error) {
       console.error("Error loading vendor data:", error);
       // If it's an authentication error, redirect to signin
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       if (
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("401")
@@ -223,8 +223,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error updating profile:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(`Failed to update profile: ${errorMessage}`);
     }
   };
@@ -258,8 +257,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error submitting service:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(
         `Failed to ${
           editingService ? "update" : "create"
@@ -276,8 +274,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error deleting service:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(`Failed to delete service: ${errorMessage}`);
     }
   };
@@ -379,8 +376,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error submitting staff:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(
         `Failed to ${
           editingStaff ? "update" : "create"
@@ -406,8 +402,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error deleting staff:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(`Failed to delete staff member: ${errorMessage}`);
     }
   };
@@ -423,8 +418,7 @@ export default function VendorDashboardPage() {
       await loadVendorData();
     } catch (error) {
       console.error("Error updating booking status:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(`Failed to update booking status: ${errorMessage}`);
     }
   };
@@ -436,8 +430,7 @@ export default function VendorDashboardPage() {
       router.push("/" as Route);
     } catch (error) {
       console.error("Error signing out:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       alert(`Failed to sign out: ${errorMessage}`);
     }
   };

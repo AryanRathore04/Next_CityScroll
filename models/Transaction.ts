@@ -339,6 +339,11 @@ transactionSchema.index({ customerId: 1 });
 transactionSchema.index({ type: 1, status: 1 });
 transactionSchema.index({ createdAt: -1 });
 transactionSchema.index({ processedAt: -1 });
+// Composite index for idempotency checks (Major Fix #15)
+transactionSchema.index(
+  { gatewayTransactionId: 1, bookingId: 1 },
+  { unique: true, sparse: true },
+);
 
 commissionConfigSchema.index({ vendorId: 1, isActive: 1 });
 commissionConfigSchema.index({ effectiveFrom: 1, effectiveTo: 1 });

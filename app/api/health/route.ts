@@ -178,6 +178,8 @@ export async function GET() {
         ],
         uptime: 0,
         version: "unknown",
+        code: "HEALTH_CHECK_FAILED",
+        timestamp: new Date().toISOString(),
       },
       { status: 503 },
     );

@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CouponService } from "@/lib/coupon-service";
 import { serverLogger as logger } from "@/lib/logger";
+import { requireAuth } from "@/lib/middleware";
 
-export async function POST(request: NextRequest) {
+async function validateCouponHandler(request: NextRequest) {
   try {
     const body = await request.json();
-    const { couponCode, customerId, bookingDetails } = body;
+    const { couponCode, bookingDetails } = body;
 
-    if (!couponCode || !customerId || !bookingDetails) {
+    // Get customerId from authenticated user, NOT from request body
+    const currentUser = (request as any).user;
+    const customerId = currentUser.id;
+
+    if (!couponCode || !bookingDetails) {
       return NextResponse.json(
         {
           success: false,
-          error: "Coupon code, customer ID, and booking details are required",
+          error: "Coupon code and booking details are required",
         },
         { status: 400 },
       );
@@ -40,17 +45,16 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+async function applyCouponHandler(request: NextRequest) {
   try {
     const body = await request.json();
-    const { couponCode, customerId, bookingId, discountAmount } = body;
+    const { couponCode, bookingId, discountAmount } = body;
 
-    if (
-      !couponCode ||
-      !customerId ||
-      !bookingId ||
-      discountAmount === undefined
-    ) {
+    // Get customerId from authenticated user, NOT from request body
+    const currentUser = (request as any).user;
+    const customerId = currentUser.id;
+
+    if (!couponCode || !bookingId || discountAmount === undefined) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 },
@@ -80,3 +84,7 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+// Export with authentication requirement
+export const POST = requireAuth(validateCouponHandler);
+export const PUT = requireAuth(applyCouponHandler);

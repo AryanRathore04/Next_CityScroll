@@ -137,6 +137,7 @@ const UserSchema = new Schema<IUser>(
 );
 
 // Enhanced indexes for better query performance
+UserSchema.index({ email: 1 }, { unique: true }); // Unique email index for fast auth lookups
 UserSchema.index({ email: 1, userType: 1 }); // Compound for auth queries
 UserSchema.index({ userType: 1, status: 1 }); // Compound for filtering active vendors/customers
 UserSchema.index({ "businessAddress.city": 1, userType: 1, status: 1 }); // Location-based vendor search
@@ -149,6 +150,57 @@ UserSchema.index({ businessName: "text", firstName: "text", lastName: "text" });
 // Virtual for full name
 UserSchema.virtual("fullName").get(function () {
   return `${this.firstName} ${this.lastName}`;
+});
+
+// Pre-save hook for logging
+UserSchema.pre("save", function (next) {
+  console.log("🔵 [USER MODEL] Pre-save hook triggered for user:", {
+    isNew: this.isNew,
+    email: this.email,
+    userType: this.userType,
+    modifiedPaths: this.modifiedPaths(),
+  });
+
+  if (this.isNew) {
+    console.log("🔵 [USER MODEL] Creating new user with data:", {
+      email: this.email,
+      firstName: this.firstName,
+      lastName: this.lastName,
+      userType: this.userType,
+      businessName: this.businessName,
+      status: this.status,
+    });
+  }
+  next();
+});
+
+// Post-save hook for logging
+UserSchema.post("save", function (doc) {
+  console.log("🟢 [USER MODEL] User saved successfully:", {
+    userId: doc._id.toString(),
+    email: doc.email,
+    userType: doc.userType,
+    status: doc.status,
+    isNew: doc.isNew,
+  });
+});
+
+// Pre-findOne hook for logging
+UserSchema.pre("findOne", function () {
+  console.log("🔵 [USER MODEL] findOne query:", this.getQuery());
+});
+
+// Post-findOne hook for logging
+UserSchema.post("findOne", function (doc) {
+  if (doc) {
+    console.log("🟢 [USER MODEL] findOne result found:", {
+      userId: doc._id.toString(),
+      email: doc.email,
+      userType: doc.userType,
+    });
+  } else {
+    console.log("🔴 [USER MODEL] findOne result: no user found");
+  }
 });
 
 // Method to get safe user data (without password)
