@@ -33,6 +33,7 @@ export interface VendorProfile {
   phone: string;
   email: string;
   description: string;
+  profileImage?: string; // Featured thumbnail image for home page
   images: string[];
   rating: number;
   totalReviews: number;

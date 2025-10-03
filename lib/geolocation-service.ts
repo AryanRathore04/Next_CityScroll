@@ -375,6 +375,8 @@ export class GeolocationService {
           isVerified: 1,
           isOpen: { $literal: true }, // Mock - would calculate based on business hours
           nextAvailableSlot: { $literal: null }, // Mock - would calculate from bookings
+          profileImage: 1, // Featured thumbnail for home page display
+          images: 1, // Gallery images for detail page
         },
       });
 

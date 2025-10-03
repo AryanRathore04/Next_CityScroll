@@ -54,15 +54,14 @@ export function NotificationBell({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
 
   const fetchRecentNotifications = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      // User not logged in, skip fetching silently
+      return;
+    }
+
     try {
       setLoading(true);
-
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        // User not logged in, skip fetching
-        setLoading(false);
-        return;
-      }
 
       const response = await fetch(
         "/api/notifications?limit=5&unreadOnly=false",

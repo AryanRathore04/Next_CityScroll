@@ -1,20 +1,35 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { serverLogger as logger } from "@/lib/logger";
+import { requireAuth } from "@/lib/middleware/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const vendorId = searchParams.get("vendorId");
-  const status = searchParams.get("status");
+async function getVendorBookingsHandler(request: NextRequest) {
+  const currentUser = (request as any).user;
 
-  if (!vendorId) {
-    return NextResponse.json({ error: "vendorId required" }, { status: 400 });
+  // Verify user is a vendor
+  if (!currentUser || currentUser.userType !== "vendor") {
+    logger.warn("Non-vendor attempted to access vendor bookings", {
+      userId: currentUser?.id,
+      userType: currentUser?.userType,
+    });
+    return NextResponse.json(
+      { error: "Only vendors can access this endpoint" },
+      { status: 403 },
+    );
   }
 
-  // Handle test scenarios
-  if (vendorId === "test" || vendorId.startsWith("test-")) {
+  // Use authenticated user's ID instead of query parameter to prevent unauthorized access
+  const vendorId = currentUser.id;
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status");
+
+  // Handle test scenarios (only in development)
+  if (
+    process.env.NODE_ENV === "development" &&
+    (vendorId === "test" || vendorId.startsWith("test-"))
+  ) {
     const testBookings = [
       {
         id: "booking-1",
@@ -56,40 +71,68 @@ export async function GET(request: Request) {
     await connectDB();
     const Booking = (await import("../../../../models/Booking")).default;
 
-    // Build query filter
-    const filter: any = { vendor: vendorId };
+    // Build query filter - use vendorId from authenticated user
+    const filter: any = { vendorId: vendorId };
     if (status) {
       filter.status = status;
     }
 
-    const bookings = await Booking.find(filter)
-      .populate("customer", "firstName lastName email phone")
-      .populate("service", "name price category duration")
-      .sort({ createdAt: -1 });
+    logger.info("Fetching vendor bookings", {
+      vendorId,
+      status: status || "all",
+    });
 
-    const formattedBookings = bookings.map((booking: any) => ({
-      id: booking._id.toString(),
-      customerName: `${booking.customer.firstName} ${booking.customer.lastName}`,
-      customerEmail: booking.customer.email,
-      customerPhone: booking.customer.phone,
-      serviceName: booking.service.name,
-      servicePrice: booking.service.price,
-      bookingDate: booking.date,
-      bookingTime: booking.time,
-      status: booking.status,
-      vendorId: booking.vendor.toString(),
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
-    }));
+    const bookings = await Booking.find(filter)
+      .populate("customerId", "firstName lastName email phone")
+      .populate("serviceId", "name price category duration")
+      .sort({ datetime: 1 }); // Sort by booking datetime ascending (upcoming first)
+
+    const formattedBookings = bookings.map((booking: any) => {
+      // Extract date and time from datetime field
+      const bookingDateTime = new Date(booking.datetime);
+      const bookingDate = bookingDateTime.toISOString().split("T")[0]; // YYYY-MM-DD
+      const bookingTime = bookingDateTime.toTimeString().slice(0, 5); // HH:MM
+
+      return {
+        id: booking._id.toString(),
+        customerName: `${booking.customerId.firstName} ${booking.customerId.lastName}`,
+        customerEmail: booking.customerId.email,
+        customerPhone: booking.customerId.phone,
+        serviceName: booking.serviceId.name,
+        servicePrice: booking.serviceId.price,
+        bookingDate: bookingDate,
+        bookingTime: bookingTime,
+        datetime: booking.datetime, // Include original datetime for reference
+        status: booking.status,
+        vendorId: booking.vendorId.toString(),
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+      };
+    });
 
     return NextResponse.json(formattedBookings);
   } catch (error) {
-    console.error("Database error:", error);
+    logger.error("Vendor bookings fetch error:", {
+      error: error instanceof Error ? error.message : String(error),
+      vendorId: (request as any).user?.id,
+    });
     return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }
 
-export async function PUT(request: Request) {
+export const GET = requireAuth(getVendorBookingsHandler);
+
+async function updateBookingStatusHandler(request: NextRequest) {
+  const currentUser = (request as any).user;
+
+  // Verify user is a vendor
+  if (!currentUser || currentUser.userType !== "vendor") {
+    return NextResponse.json(
+      { error: "Only vendors can update booking status" },
+      { status: 403 },
+    );
+  }
+
   try {
     const body = await request.json();
     const { id, status } = body || {};
@@ -101,20 +144,85 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Validate status transitions
+    const validStatuses = [
+      "pending",
+      "confirmed",
+      "completed",
+      "cancelled",
+      "no_show",
+    ];
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json(
+        {
+          error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+        },
+        { status: 400 },
+      );
+    }
+
     await connectDB();
     const Booking = (await import("../../../../models/Booking")).default;
 
+    // Find booking and verify it belongs to this vendor
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+
+    if (booking.vendorId.toString() !== currentUser.id) {
+      logger.warn("Vendor attempted to update another vendor's booking", {
+        vendorId: currentUser.id,
+        bookingId: id,
+        bookingVendorId: booking.vendorId.toString(),
+      });
+      return NextResponse.json(
+        { error: "You can only update your own bookings" },
+        { status: 403 },
+      );
+    }
+
+    // Enforce status workflow
+    const currentStatus = booking.status;
+    const validTransitions: Record<string, string[]> = {
+      pending: ["confirmed", "cancelled"],
+      confirmed: ["completed", "cancelled", "no_show"],
+      completed: [], // Final state
+      cancelled: [], // Final state
+      no_show: [], // Final state
+    };
+
+    if (!validTransitions[currentStatus]?.includes(status)) {
+      return NextResponse.json(
+        { error: `Cannot change status from ${currentStatus} to ${status}` },
+        { status: 400 },
+      );
+    }
+
+    // Update booking
     await Booking.findByIdAndUpdate(id, {
       status,
       updatedAt: new Date(),
     });
 
-    return NextResponse.json({ ok: true });
+    logger.info("Booking status updated", {
+      bookingId: id,
+      vendorId: currentUser.id,
+      oldStatus: currentStatus,
+      newStatus: status,
+    });
+
+    return NextResponse.json({ ok: true, status });
   } catch (error) {
-    console.error("Update booking error:", error);
+    logger.error("Update booking error:", {
+      error: error instanceof Error ? error.message : String(error),
+      vendorId: (request as any).user?.id,
+    });
     return NextResponse.json(
       { error: "Failed to update booking" },
       { status: 500 },
     );
   }
 }
+
+export const PUT = requireAuth(updateBookingStatusHandler);

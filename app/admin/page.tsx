@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState, LoadingEmptyState } from "@/components/ui/empty-state";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import {
   Users,
   TrendingUp,
@@ -176,8 +177,9 @@ export default function AdminDashboardPage() {
   const loadPendingVendors = async () => {
     setIsLoading(true);
     try {
-      // For demo purposes, we'll use test data if no auth token
-      const response = await fetch("/api/admin/vendor-approval?test=true", {
+      console.log("🔵 [ADMIN] Loading pending vendors from database...");
+      // FIXED: Removed ?test=true to fetch real data from database
+      const response = await fetch("/api/admin/vendor-approval", {
         headers: {
           Authorization: `Bearer ${
             localStorage.getItem("accessToken") || "demo-token"
@@ -185,14 +187,24 @@ export default function AdminDashboardPage() {
         },
       });
 
+      console.log(
+        "🔵 [ADMIN] Pending vendors response status:",
+        response.status,
+      );
+
       if (response.ok) {
         const data = await response.json();
+        console.log("🟢 [ADMIN] Pending vendors loaded:", {
+          count: data.pendingVendors?.length || 0,
+          total: data.total,
+        });
         setPendingVendors(data.pendingVendors || []);
       } else {
-        console.error("Failed to load pending vendors");
+        const errorText = await response.text();
+        console.error("🔴 [ADMIN] Failed to load pending vendors:", errorText);
       }
     } catch (error) {
-      console.error("Error loading pending vendors:", error);
+      console.error("🔴 [ADMIN] Error loading pending vendors:", error);
     } finally {
       setIsLoading(false);
     }
@@ -204,6 +216,8 @@ export default function AdminDashboardPage() {
 
     setIsLoading(true);
     try {
+      console.log(`🔵 [ADMIN] ${approvalAction}ing vendor:`, selectedVendor.id);
+
       const response = await fetch("/api/admin/vendor-approval", {
         method: "POST",
         headers: {
@@ -221,7 +235,7 @@ export default function AdminDashboardPage() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`Vendor ${approvalAction}d successfully:`, data);
+        console.log(`✅ [ADMIN] Vendor ${approvalAction}d successfully:`, data);
 
         // Remove the vendor from pending list
         setPendingVendors((prev) =>
@@ -234,13 +248,25 @@ export default function AdminDashboardPage() {
         setApprovalReason("");
         setApprovalAction("approve");
 
-        alert(`Vendor ${approvalAction}d successfully!`);
+        alert(
+          `Vendor ${approvalAction}d successfully! ${
+            approvalAction === "approve"
+              ? "An email has been sent to the vendor."
+              : ""
+          }`,
+        );
+
+        // Reload the pending vendors list to ensure we have the latest data
+        await loadPendingVendors();
       } else {
         const error = await response.json();
-        alert(`Failed to ${approvalAction} vendor: ${error.message}`);
+        console.error(`🔴 [ADMIN] Failed to ${approvalAction} vendor:`, error);
+        alert(
+          `Failed to ${approvalAction} vendor: ${error.error || error.message}`,
+        );
       }
     } catch (error) {
-      console.error(`Error ${approvalAction}ing vendor:`, error);
+      console.error(`🔴 [ADMIN] Error ${approvalAction}ing vendor:`, error);
       alert(`Failed to ${approvalAction} vendor. Please try again.`);
     } finally {
       setIsLoading(false);
@@ -326,9 +352,7 @@ export default function AdminDashboardPage() {
                   <Moon className="h-4 w-4" />
                 )}
               </Button>
-              <Button variant="ghost" size="sm" className="p-2">
-                <Bell className="h-4 w-4" />
-              </Button>
+              <NotificationBell />
               <Button variant="ghost" size="sm" className="p-2">
                 <Settings className="h-4 w-4" />
               </Button>

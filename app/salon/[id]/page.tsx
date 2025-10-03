@@ -43,6 +43,7 @@ interface VendorData {
   rating?: number;
   totalBookings?: number;
   profileImage?: string;
+  images?: string[]; // Gallery images array
   description?: string;
   phone?: string;
   email?: string;
@@ -90,57 +91,20 @@ interface VendorStats {
   };
 }
 
-const services = [
-  {
-    id: "1",
-    name: "Deep Tissue Massage",
-    duration: "60 mins",
-    price: "₹2,500",
-    description:
-      "Intensive therapeutic massage targeting muscle tension and knots",
-    image:
-      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop&crop=center",
-  },
-  {
-    id: "2",
-    name: "Hot Stone Therapy",
-    duration: "75 mins",
-    price: "₹3,200",
-    description: "Relaxing treatment using heated stones to release tension",
-    image:
-      "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=400&h=300&fit=crop&crop=center",
-  },
-  {
-    id: "3",
-    name: "Aromatherapy Session",
-    duration: "45 mins",
-    price: "₹2,000",
-    description: "Holistic therapy using essential oils for mind-body wellness",
-    image:
-      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop&crop=center",
-  },
-  {
-    id: "4",
-    name: "Couples Massage",
-    duration: "90 mins",
-    price: "₹5,500",
-    description: "Shared relaxation experience in our couples suite",
-    image:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop&crop=center",
-  },
-];
-
-const timeSlots = [
-  "9:00 AM",
-  "10:00 AM",
-  "11:00 AM",
-  "12:00 PM",
-  "2:00 PM",
-  "3:00 PM",
-  "4:00 PM",
-  "5:00 PM",
-  "6:00 PM",
-];
+interface AvailabilityData {
+  isOpen: boolean;
+  businessHours: {
+    open: string;
+    close: string;
+    display: string;
+  } | null;
+  timeSlots: Array<{
+    time: string;
+    available: boolean;
+  }>;
+  availableSlots: string[];
+  message?: string;
+}
 
 export default function VendorProfilePage({
   params,
@@ -151,7 +115,17 @@ export default function VendorProfilePage({
   const [services, setServices] = useState<ServiceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingServices, setLoadingServices] = useState(true);
-  const [selectedService, setSelectedService] = useState<any>(null);
+  const [selectedService, setSelectedService] = useState<{
+    id: string;
+    name: string;
+    duration: string;
+    price: string;
+    description?: string;
+    _id?: string;
+    durationInMinutes?: number;
+    priceValue?: number;
+    category?: string;
+  } | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -159,6 +133,10 @@ export default function VendorProfilePage({
   const [isLoadingReviews, setIsLoadingReviews] = useState(true);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilityData | null>(
+    null,
+  );
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
   const router = useRouter();
 
   // Resolve params and fetch vendor data
@@ -198,12 +176,23 @@ export default function VendorProfilePage({
           setReviews(data.reviews);
           setVendorStats(data.vendorStats);
         }
+
+        // Fetch availability
+        setLoadingAvailability(true);
+        const availabilityResponse = await fetch(
+          `/api/vendor/${resolvedParams.id}/availability`,
+        );
+        if (availabilityResponse.ok) {
+          const availData = await availabilityResponse.json();
+          setAvailability(availData.data);
+        }
       } catch (error) {
         console.error("Failed to fetch vendor data:", error);
       } finally {
         setLoading(false);
         setLoadingServices(false);
         setIsLoadingReviews(false);
+        setLoadingAvailability(false);
       }
     };
 
@@ -245,8 +234,14 @@ export default function VendorProfilePage({
       <section className="relative">
         <div className="h-64 md:h-80 bg-gray-100 overflow-hidden">
           <img
-            src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&h=400&fit=crop&crop=center"
-            alt="Serenity Wellness Spa"
+            src={
+              vendor.profileImage ||
+              (vendor.images && vendor.images.length > 0
+                ? vendor.images[0]
+                : null) ||
+              "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800&h=400&fit=crop&crop=center"
+            }
+            alt={vendor.businessName}
             className="w-full h-full object-cover"
           />
         </div>
@@ -255,12 +250,14 @@ export default function VendorProfilePage({
             <div className="flex items-end justify-between">
               <div>
                 <h1 className="text-3xl md:text-4xl font-semibold text-white mb-2">
-                  Serenity Wellness Spa
+                  {vendor.businessName}
                 </h1>
                 <div className="flex items-center gap-2 text-white/90">
                   <MapPin className="h-4 w-4" />
                   <span className="font-medium">
-                    Connaught Place, New Delhi
+                    {vendor.businessAddress?.city || "Location"}
+                    {vendor.businessAddress?.state &&
+                      `, ${vendor.businessAddress.state}`}
                   </span>
                 </div>
               </div>
@@ -365,6 +362,10 @@ export default function VendorProfilePage({
                                   duration: `${service.duration} mins`,
                                   price: `₹${service.price.toLocaleString()}`,
                                   description: service.description,
+                                  _id: service.id,
+                                  durationInMinutes: service.duration,
+                                  priceValue: service.price,
+                                  category: service.category,
                                 });
                                 setIsBookingDialogOpen(true);
                               }}
@@ -549,30 +550,36 @@ export default function VendorProfilePage({
                   <h2 className="text-2xl font-semibold text-gray-700 mb-6">
                     Our Spaces
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {[
-                      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?w=300&h=300&fit=crop&crop=center",
-                      "https://images.unsplash.com/photo-1487088678257-3a541e6e3922?w=300&h=300&fit=crop&crop=center",
-                    ].map((src, i) => (
-                      <div
-                        key={i}
-                        className="aspect-square bg-gray-100 rounded-xl overflow-hidden"
-                      >
-                        <img
-                          src={src}
-                          alt={`Gallery ${i + 1}`}
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  {vendor.images && vendor.images.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {vendor.images.map((src: string, i: number) => (
+                        <div
+                          key={i}
+                          className="aspect-square bg-gray-100 rounded-xl overflow-hidden"
+                        >
+                          <img
+                            src={src}
+                            alt={`${vendor.businessName} - Gallery ${i + 1}`}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              // Fallback if image fails to load
+                              (e.target as HTMLImageElement).src =
+                                "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=300&h=300&fit=crop&crop=center";
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <p className="text-gray-600 text-lg mb-2">
+                        No gallery images yet
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        This venue hasn't added any gallery images.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
@@ -587,10 +594,18 @@ export default function VendorProfilePage({
                   <Clock className="h-4 w-4 text-gray-500" />
                   <div>
                     <div className="text-sm font-medium text-gray-700">
-                      Open Today
+                      {loadingAvailability
+                        ? "Loading..."
+                        : availability?.isOpen
+                        ? "Open Today"
+                        : "Closed Today"}
                     </div>
                     <div className="text-sm text-gray-500">
-                      9:00 AM - 9:00 PM
+                      {loadingAvailability
+                        ? "..."
+                        : availability?.businessHours?.display ||
+                          availability?.message ||
+                          "Hours not available"}
                     </div>
                   </div>
                 </div>
@@ -613,31 +628,90 @@ export default function VendorProfilePage({
               <h3 className="font-semibold text-gray-700 mb-4">
                 Available Today
               </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {timeSlots.map((time) => (
-                  <Button
-                    key={time}
-                    variant={selectedTimeSlot === time ? "coral" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedTimeSlot(time)}
-                    className="text-xs"
-                  >
-                    {time}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                variant="coral"
-                className="w-full mt-4 rounded-lg"
-                disabled={!selectedTimeSlot}
-                onClick={() => {
-                  if (selectedTimeSlot) router.push("/booking" as Route);
-                }}
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Book Appointment
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
+              {loadingAvailability ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-coral-500 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">
+                    Loading availability...
+                  </p>
+                </div>
+              ) : !availability?.isOpen ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <Clock className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 font-medium mb-1">
+                    {availability?.message || "Closed Today"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Please check back on another day
+                  </p>
+                </div>
+              ) : !availability.timeSlots ||
+                availability.timeSlots.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <Clock className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-600 font-medium mb-1">
+                    No Time Slots
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    No time slots configured for today
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 text-xs text-gray-500 flex items-center gap-2">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 bg-coral-500 rounded-full"></span>
+                      Available
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 bg-gray-300 rounded-full"></span>
+                      Booked
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {availability.timeSlots.map((slot) => (
+                      <Button
+                        key={slot.time}
+                        variant={
+                          selectedTimeSlot === slot.time ? "coral" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => {
+                          if (slot.available) {
+                            setSelectedTimeSlot(slot.time);
+                            // Open booking dialog with first service if available
+                            if (services.length > 0) {
+                              const firstService = services[0];
+                              setSelectedService({
+                                id: firstService.id,
+                                name: firstService.name,
+                                duration: `${firstService.duration} mins`,
+                                price: `₹${firstService.price.toLocaleString()}`,
+                                description: firstService.description,
+                                _id: firstService.id,
+                                durationInMinutes: firstService.duration,
+                                priceValue: firstService.price,
+                                category: firstService.category,
+                              });
+                              setIsBookingDialogOpen(true);
+                            }
+                          }
+                        }}
+                        disabled={!slot.available}
+                        className={`text-xs transition-all ${
+                          !slot.available
+                            ? "opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-200"
+                            : selectedTimeSlot === slot.time
+                            ? "bg-coral-500 text-white border-coral-500"
+                            : "hover:border-coral-500 hover:text-coral-500"
+                        }`}
+                      >
+                        {slot.time}
+                      </Button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="bg-white rounded-xl p-6 airbnb-shadow border border-gray-200">
@@ -679,12 +753,16 @@ export default function VendorProfilePage({
           {selectedService && vendor && (
             <BookingForm
               service={{
-                _id: selectedService.id,
+                _id: selectedService._id || selectedService.id,
                 name: selectedService.name,
-                description: selectedService.description,
-                price: parseFloat(selectedService.price.replace(/[^\d.]/g, "")),
-                duration: parseInt(selectedService.duration),
-                category: "Spa",
+                description: selectedService.description || "",
+                price:
+                  selectedService.priceValue ||
+                  parseFloat(selectedService.price.replace(/[^\d.]/g, "")),
+                duration:
+                  selectedService.durationInMinutes ||
+                  parseInt(selectedService.duration),
+                category: selectedService.category || "Spa",
               }}
               vendor={{
                 _id: vendor._id,

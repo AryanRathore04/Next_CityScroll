@@ -114,12 +114,96 @@ export function BookingForm({ service, vendor, onBack }: BookingFormProps) {
       }
     } catch (error) {
       console.error("Booking error:", error);
+
+      let errorTitle = "Booking Failed";
+      let errorDescription = "Please try again";
+      let shouldRedirect = false;
+
+      if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase();
+
+        // Time slot conflict
+        if (
+          errorMsg.includes("already booked") ||
+          errorMsg.includes("conflict") ||
+          errorMsg.includes("time slot")
+        ) {
+          errorTitle = "Time Slot Unavailable";
+          errorDescription =
+            "This time slot has been taken. Please choose another time.";
+        }
+        // Authentication issues
+        else if (
+          errorMsg.includes("unauthorized") ||
+          errorMsg.includes("authentication") ||
+          errorMsg.includes("token")
+        ) {
+          errorTitle = "Session Expired";
+          errorDescription = "Your session has expired. Please sign in again.";
+          shouldRedirect = true;
+        }
+        // Network/connection errors
+        else if (
+          errorMsg.includes("network") ||
+          errorMsg.includes("fetch") ||
+          errorMsg.includes("connection")
+        ) {
+          errorTitle = "Connection Error";
+          errorDescription =
+            "Unable to connect to server. Check your internet connection and try again.";
+        }
+        // Service unavailable
+        else if (
+          errorMsg.includes("service") &&
+          errorMsg.includes("unavailable")
+        ) {
+          errorTitle = "Service Unavailable";
+          errorDescription =
+            "The selected service is currently unavailable. Please try again later.";
+        }
+        // Staff unavailable
+        else if (
+          errorMsg.includes("staff") &&
+          errorMsg.includes("unavailable")
+        ) {
+          errorTitle = "Staff Unavailable";
+          errorDescription =
+            "The selected staff member is not available at this time. Please choose another time or select 'Any available'.";
+        }
+        // Vendor inactive
+        else if (
+          errorMsg.includes("vendor") &&
+          (errorMsg.includes("inactive") || errorMsg.includes("closed"))
+        ) {
+          errorTitle = "Vendor Unavailable";
+          errorDescription =
+            "This salon is currently not accepting bookings. Please try another salon.";
+        }
+        // Past datetime
+        else if (errorMsg.includes("past") || errorMsg.includes("future")) {
+          errorTitle = "Invalid Date/Time";
+          errorDescription =
+            "Please select a future date and time for your booking.";
+        }
+        // Generic error with message
+        else {
+          errorDescription =
+            error.message || "An unexpected error occurred. Please try again.";
+        }
+      }
+
       toast({
-        title: "Booking Failed",
-        description:
-          error instanceof Error ? error.message : "Please try again",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
+
+      // Redirect to signin if authentication failed
+      if (shouldRedirect) {
+        setTimeout(() => {
+          router.push("/signin");
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }

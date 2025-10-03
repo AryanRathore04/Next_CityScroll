@@ -5,7 +5,7 @@ import { serverLogger as logger } from "@/lib/logger";
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ vendorId: string }> },
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
     const user = await verifyAuth(request);
@@ -22,7 +22,7 @@ export async function GET(
 
     // Next provides params as a Promise in the generated types
     const paramsObj = await context.params;
-    const vendorId = paramsObj.vendorId;
+    const vendorId = paramsObj.id;
 
     const results = await GeolocationService.getNearbyCustomers(
       vendorId,

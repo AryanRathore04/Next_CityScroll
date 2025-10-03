@@ -5,6 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CheckCircle,
   Store,
   Image as ImageIcon,
@@ -27,6 +34,7 @@ interface OnboardingWizardProps {
 interface ProfileFormData {
   businessName: string;
   businessType: string;
+  customBusinessType: string;
   businessAddress: string;
   city: string;
   state: string;
@@ -52,10 +60,26 @@ export function OnboardingWizard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
 
+  // Predefined business types
+  const businessTypes = [
+    "Salon",
+    "Spa",
+    "Wellness Center",
+    "Beauty Studio",
+    "Massage Parlor",
+    "Hair Studio",
+    "Nail Salon",
+    "Barbershop",
+    "Makeup Studio",
+    "Skin Care Clinic",
+    "Other",
+  ];
+
   // Form data
   const [profileData, setProfileData] = useState<ProfileFormData>({
     businessName: "",
     businessType: "",
+    customBusinessType: "",
     businessAddress: "",
     city: "",
     state: "",
@@ -109,7 +133,11 @@ export function OnboardingWizard({
 
       const updateData = {
         businessName: profileData.businessName,
-        businessType: profileData.businessType,
+        // Use custom business type if "Other" is selected, otherwise use the selected type
+        businessType:
+          profileData.businessType === "Other"
+            ? profileData.customBusinessType
+            : profileData.businessType,
         businessAddress: {
           street: profileData.businessAddress,
           city: profileData.city,
@@ -382,19 +410,51 @@ export function OnboardingWizard({
                   </div>
                   <div>
                     <Label htmlFor="businessType">Business Type *</Label>
-                    <Input
-                      id="businessType"
+                    <Select
                       value={profileData.businessType}
-                      onChange={(e) =>
+                      onValueChange={(value) => {
                         setProfileData({
                           ...profileData,
-                          businessType: e.target.value,
-                        })
-                      }
-                      placeholder="e.g., Spa, Salon, Wellness Center"
-                      required
-                    />
+                          businessType: value,
+                          // Clear custom input if switching away from "Other"
+                          customBusinessType:
+                            value !== "Other"
+                              ? ""
+                              : profileData.customBusinessType,
+                        });
+                      }}
+                    >
+                      <SelectTrigger id="businessType">
+                        <SelectValue placeholder="Select business type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {businessTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                  {profileData.businessType === "Other" && (
+                    <div>
+                      <Label htmlFor="customBusinessType">
+                        Specify Business Type *
+                      </Label>
+                      <Input
+                        id="customBusinessType"
+                        placeholder="Enter your business type"
+                        value={profileData.customBusinessType}
+                        onChange={(e) =>
+                          setProfileData({
+                            ...profileData,
+                            customBusinessType: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -755,6 +815,8 @@ export function OnboardingWizard({
                   disabled={
                     !profileData.businessName ||
                     !profileData.businessType ||
+                    (profileData.businessType === "Other" &&
+                      !profileData.customBusinessType) ||
                     !profileData.city ||
                     isSubmitting
                   }

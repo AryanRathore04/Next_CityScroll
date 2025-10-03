@@ -231,6 +231,64 @@ export default function BookingsPage() {
 }
 
 function BookingCard({ booking }: { booking: Booking }) {
+  const router = useRouter();
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancel = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to cancel this booking? This action cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    setCancelling(true);
+    try {
+      const response = await fetch(`/api/bookings/${booking._id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to cancel booking");
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Booking Cancelled",
+        description:
+          result.booking.refundStatus === "refund_pending"
+            ? "Your booking has been cancelled. Refund will be processed within 5-7 business days."
+            : "Your booking has been cancelled successfully.",
+      });
+
+      // Refresh the page to show updated bookings
+      window.location.reload();
+    } catch (error) {
+      console.error("Cancel booking error:", error);
+      toast({
+        title: "Cancellation Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to cancel booking. Please try again or contact support.",
+        variant: "destructive",
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // Determine if booking can be cancelled
+  const canCancel =
+    (booking.status === "pending" || booking.status === "confirmed") &&
+    new Date(booking.datetime) > new Date();
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader>
@@ -275,6 +333,22 @@ function BookingCard({ booking }: { booking: Booking }) {
             <span>${booking.totalPrice}</span>
           </div>
         </div>
+
+        {/* Cancel button for eligible bookings */}
+        {canCancel && (
+          <div className="mt-4 pt-4 border-t">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="w-full"
+            >
+              {cancelling && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Cancel Booking
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

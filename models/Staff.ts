@@ -246,6 +246,26 @@ StaffSchema.methods.isAvailableOn = function (dayOfWeek: DayOfWeek): boolean {
   return schedule && schedule.isAvailable && this.isActive;
 };
 
+// Method to check if staff is available on a specific date
+StaffSchema.methods.isAvailableOnDate = function (date: Date): boolean {
+  if (!this.isActive) return false;
+
+  // If no schedule is set, assume not available
+  if (!this.schedule) return false;
+
+  const dayOfWeek = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ][date.getDay()] as DayOfWeek;
+
+  return this.isAvailableOn(dayOfWeek);
+};
+
 // Method to get available time slots for a specific day
 StaffSchema.methods.getAvailableSlots = function (
   dayOfWeek: DayOfWeek,
@@ -256,6 +276,12 @@ StaffSchema.methods.getAvailableSlots = function (
   }
 
   const schedule = this.schedule[dayOfWeek];
+
+  // If no schedule for this day, return empty
+  if (!schedule || !schedule.isAvailable) {
+    return [];
+  }
+
   const slots: string[] = [];
 
   // This is a simplified version - in production you'd want more sophisticated slot calculation
@@ -272,15 +298,17 @@ StaffSchema.methods.getAvailableSlots = function (
     const slotTime = minutesToTimeString(currentMinutes);
 
     // Check if this slot conflicts with breaks
-    const conflictsWithBreak = schedule.breaks.some(
-      (breakTime: { startTime: string; endTime: string }) => {
-        const breakStart = timeStringToMinutes(breakTime.startTime);
-        const breakEnd = timeStringToMinutes(breakTime.endTime);
-        return (
-          currentMinutes < breakEnd && currentMinutes + duration > breakStart
-        );
-      },
-    );
+    const conflictsWithBreak =
+      schedule.breaks &&
+      schedule.breaks.some(
+        (breakTime: { startTime: string; endTime: string }) => {
+          const breakStart = timeStringToMinutes(breakTime.startTime);
+          const breakEnd = timeStringToMinutes(breakTime.endTime);
+          return (
+            currentMinutes < breakEnd && currentMinutes + duration > breakStart
+          );
+        },
+      );
 
     if (!conflictsWithBreak) {
       slots.push(slotTime);
@@ -292,7 +320,23 @@ StaffSchema.methods.getAvailableSlots = function (
   return slots;
 };
 
-// Method to get safe staff data (without sensitive info)
+// Method to get available time slots for a specific date
+StaffSchema.methods.getAvailableTimeSlots = function (
+  date: Date,
+  duration: number, // in minutes
+): string[] {
+  const dayOfWeek = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ][date.getDay()] as DayOfWeek;
+
+  return this.getAvailableSlots(dayOfWeek, duration);
+}; // Method to get safe staff data (without sensitive info)
 StaffSchema.methods.toSafeObject = function () {
   const { email, phone, commission, hourlyRate, ...safeStaff } =
     this.toObject();

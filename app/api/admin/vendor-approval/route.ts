@@ -7,6 +7,10 @@ import {
   validateInput,
   sanitizeObject,
 } from "@/lib/validation";
+import {
+  sendVendorApprovalEmail,
+  sendVendorRejectionEmail,
+} from "@/lib/email-service";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +84,30 @@ async function vendorApprovalHandler(request: NextRequest) {
     }
 
     await User.findByIdAndUpdate(vendorId, updateData);
+
+    // Send email notification to vendor
+    const vendorName = `${vendor.firstName} ${vendor.lastName}`;
+    const businessName = vendor.businessName || "Your Business";
+
+    console.log(
+      `📧 [EMAIL] Preparing to send ${action} email to vendor:`,
+      vendor.email,
+    );
+
+    if (action === "approve") {
+      // Send approval email with dashboard link
+      await sendVendorApprovalEmail(vendor.email, vendorName, businessName);
+      console.log(`✅ [EMAIL] Approval email sent to ${vendor.email}`);
+    } else if (action === "reject") {
+      // Send rejection email
+      await sendVendorRejectionEmail(
+        vendor.email,
+        vendorName,
+        businessName,
+        reason,
+      );
+      console.log(`✅ [EMAIL] Rejection email sent to ${vendor.email}`);
+    }
 
     // Log the approval action (optional - you can create an AdminAction model)
     // For now, we'll just log to console in production you might want to store this

@@ -76,27 +76,66 @@ export function BookingCalendar({
   // Fetch available staff for this service
   useEffect(() => {
     async function fetchStaff() {
-      if (!serviceId || !vendorId) return;
+      if (!serviceId || !vendorId) {
+        console.log("Missing serviceId or vendorId:", { serviceId, vendorId });
+        return;
+      }
 
       setLoadingStaff(true);
       try {
-        const response = await fetch(`/api/staff?vendorId=${vendorId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-        });
-        if (!response.ok) throw new Error("Failed to fetch staff");
+        console.log("Fetching staff for vendor:", vendorId);
+
+        const token = localStorage.getItem("accessToken");
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+          console.log("Using auth token for staff request");
+        } else {
+          console.log("No auth token - public staff request");
+        }
+
+        const url = `/api/staff?vendorId=${vendorId}`;
+        console.log("Fetching staff from:", url);
+
+        const response = await fetch(url, { headers });
+
+        console.log("Staff API response status:", response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Failed to fetch staff:", response.status, errorText);
+          // Continue without staff data - show message to user
+          setAvailableStaff([]);
+          setLoadingStaff(false);
+          toast({
+            title: "Staff Information Unavailable",
+            description:
+              "Continuing with booking. Staff will be assigned automatically.",
+            variant: "default",
+          });
+          return;
+        }
 
         const result = await response.json();
         if (result.success) {
+          console.log("Staff data received:", result.data);
           // Filter staff who can perform this service
-          const eligibleStaff = result.data.filter(
-            (staff: Staff) =>
-              staff.isActive &&
-              (!staff.serviceIds ||
-                staff.serviceIds.length === 0 ||
-                staff.serviceIds.includes(serviceId)),
-          );
+          const eligibleStaff = result.data
+            .filter(
+              (staff: any) =>
+                staff.isActive &&
+                (!staff.services ||
+                  staff.services.length === 0 ||
+                  staff.services.includes(serviceId)),
+            )
+            .map((staff: any) => ({
+              _id: staff._id,
+              name: `${staff.firstName} ${staff.lastName}`,
+              position: staff.specialization?.[0] || "Staff",
+              serviceIds: staff.services || [],
+              isActive: staff.isActive,
+            }));
+          console.log("Eligible staff:", eligibleStaff);
           setAvailableStaff(eligibleStaff);
         }
       } catch (error) {
@@ -250,9 +289,35 @@ export function BookingCalendar({
       return;
     }
 
+    // Parse the time
     const [hours, minutes] = selectedTime.split(":").map(Number);
+
+    // Create a new date object with the selected date
+    // Use the selected date at midnight in local timezone
     const bookingDateTime = new Date(selectedDate);
+
+    // Set the time in local timezone
     bookingDateTime.setHours(hours, minutes, 0, 0);
+
+    // Log for debugging
+    console.log("Creating booking:", {
+      selectedDate: selectedDate.toISOString(),
+      selectedTime,
+      bookingDateTime: bookingDateTime.toISOString(),
+      bookingDateTimeLocal: bookingDateTime.toString(),
+      now: new Date().toISOString(),
+      isInFuture: bookingDateTime > new Date(),
+    });
+
+    // Verify the booking is in the future
+    if (bookingDateTime <= new Date()) {
+      toast({
+        title: "Invalid Time",
+        description: "Please select a future date and time",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const bookingData = {
       datetime: bookingDateTime,

@@ -16,9 +16,18 @@ const enhancedBookingSchema = z.object({
   datetime: z
     .string()
     .datetime("Invalid datetime format")
-    .refine((dateStr) => new Date(dateStr) > new Date(), {
-      message: "Booking datetime must be in the future",
-    }),
+    .refine(
+      (dateStr) => {
+        const bookingDate = new Date(dateStr);
+        const now = new Date();
+        // Allow bookings that are at most 5 minutes in the past (to account for timezone/processing delays)
+        const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+        return bookingDate > fiveMinutesAgo;
+      },
+      {
+        message: "Booking datetime must be in the future",
+      },
+    ),
   notes: z.string().max(500).optional(),
   staffId: z.string().optional(), // Staff member ID (optional)
   staffPreference: z.enum(["any", "specific"]).default("any"), // Staff preference
@@ -130,6 +139,12 @@ async function createBookingHandler(request: NextRequest) {
     const sanitized = sanitizeObject(body);
     const validation = validateInput(enhancedBookingSchema, sanitized);
     if (!validation.success) {
+      logger.warn("Validation failed", {
+        error: validation.error,
+        receivedData: Object.keys(sanitized),
+        datetime: sanitized.datetime,
+        now: new Date().toISOString(),
+      });
       return NextResponse.json(
         {
           error: "Invalid input",
@@ -143,6 +158,14 @@ async function createBookingHandler(request: NextRequest) {
 
     const { serviceId, datetime, notes, staffId, staffPreference } =
       validation.data;
+
+    logger.info("Creating booking", {
+      serviceId,
+      datetime,
+      staffId,
+      staffPreference,
+      customerId: (request as unknown as { user?: { id: string } }).user?.id,
+    });
 
     // Authenticated user must be the customer
     const currentUser = (request as unknown as { user?: { id: string } }).user;
@@ -239,7 +262,16 @@ async function createBookingHandler(request: NextRequest) {
         );
       }
 
-      if (vendor.status !== "active") {
+      logger.info("Vendor status check", {
+        vendorId,
+        vendorStatus: vendor.status,
+        vendorUserType: vendor.userType,
+        isActive: vendor.status === "active",
+      });
+
+      // Only reject if vendor is explicitly suspended or rejected
+      // Allow bookings for vendors with status: active, approved, pending_approval, or undefined
+      if (vendor.status === "suspended" || vendor.status === "rejected") {
         await session.abortTransaction();
         return NextResponse.json(
           {
@@ -284,8 +316,8 @@ async function createBookingHandler(request: NextRequest) {
         }
 
         // Verify staff can perform this service
-        if (assignedStaff.serviceIds && assignedStaff.serviceIds.length > 0) {
-          const canPerformService = assignedStaff.serviceIds.some(
+        if (assignedStaff.services && assignedStaff.services.length > 0) {
+          const canPerformService = assignedStaff.services.some(
             (sId: any) => String(sId) === String(serviceId),
           );
           if (!canPerformService) {
@@ -311,15 +343,28 @@ async function createBookingHandler(request: NextRequest) {
         // Find available staff members who can perform this service
         const availableStaffMembers = await Staff.find({
           vendorId: vendorId,
+          isActive: true,
           $or: [
-            { serviceIds: { $size: 0 } }, // Staff with no specific services (can do all)
-            { serviceIds: serviceId }, // Staff who can do this service
+            { services: { $size: 0 } }, // Staff with no specific services (can do all)
+            { services: serviceId }, // Staff who can do this service
           ],
         }).session(session);
+
+        logger.info("Searching for available staff", {
+          vendorId,
+          serviceId,
+          bookingDate: datetime,
+          foundStaffCount: availableStaffMembers.length,
+        });
 
         for (const staffMember of availableStaffMembers) {
           // Check if staff is available on this date
           if (!staffMember.isAvailableOnDate(bookingDate)) {
+            logger.info("Staff not available on date", {
+              staffId: staffMember._id,
+              staffName: `${staffMember.firstName} ${staffMember.lastName}`,
+              date: bookingDate,
+            });
             continue;
           }
 
@@ -351,14 +396,26 @@ async function createBookingHandler(request: NextRequest) {
             assignedStaffId = staffMember._id.toString();
             logger.info("Auto-assigned staff member", {
               staffId: assignedStaffId,
-              staffName: staffMember.name,
+              staffName: `${staffMember.firstName} ${staffMember.lastName}`,
               bookingTime: datetime,
             });
             break;
+          } else {
+            logger.info("Staff has conflicting booking", {
+              staffId: staffMember._id,
+              staffName: `${staffMember.firstName} ${staffMember.lastName}`,
+              conflictingBookingId: conflictingBooking._id,
+            });
           }
         }
 
         if (!assignedStaffId) {
+          logger.warn("No staff available for booking", {
+            vendorId,
+            serviceId,
+            datetime,
+            totalStaffChecked: availableStaffMembers.length,
+          });
           await session.abortTransaction();
           return NextResponse.json(
             {

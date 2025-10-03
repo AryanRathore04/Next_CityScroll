@@ -14,9 +14,11 @@ export interface IBooking extends Document {
   notes?: string;
   customerNotes?: string;
   vendorNotes?: string;
-  paymentStatus: "pending" | "paid" | "refunded";
+  paymentStatus: "pending" | "paid" | "refunded" | "refund_pending";
   paymentMethod?: string;
   reminderSent?: boolean;
+  cancelledAt?: Date; // When booking was cancelled
+  cancelledBy?: string; // User ID who cancelled
   createdAt: Date;
   updatedAt: Date;
 }
@@ -81,7 +83,7 @@ const BookingSchema = new Schema<IBooking>(
     },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "refunded"],
+      enum: ["pending", "paid", "refunded", "refund_pending"],
       default: "pending",
     },
     paymentMethod: {
@@ -91,6 +93,13 @@ const BookingSchema = new Schema<IBooking>(
     reminderSent: {
       type: Boolean,
       default: false,
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    cancelledBy: {
+      type: String,
+      ref: "User",
     },
   },
   {

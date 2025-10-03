@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
@@ -16,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { getErrorMessage } from "@/lib/client-error-helpers";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import {
   vendorService,
   type VendorProfile,
@@ -51,7 +59,9 @@ export default function VendorDashboardPage() {
   const router = useRouter();
   const { user, userProfile, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [vendorStatus, setVendorStatus] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(
     null,
@@ -139,6 +149,7 @@ export default function VendorDashboardPage() {
   const [profileForm, setProfileForm] = useState({
     businessName: "",
     businessType: "",
+    customBusinessType: "",
     businessAddress: "",
     city: "",
     state: "",
@@ -147,6 +158,21 @@ export default function VendorDashboardPage() {
     description: "",
     amenities: [] as string[],
   });
+
+  // Predefined business types
+  const businessTypes = [
+    "Salon",
+    "Spa",
+    "Wellness Center",
+    "Beauty Studio",
+    "Massage Parlor",
+    "Hair Studio",
+    "Nail Salon",
+    "Barbershop",
+    "Makeup Studio",
+    "Skin Care Clinic",
+    "Other",
+  ];
 
   useEffect(() => {
     checkOnboardingStatus();
@@ -158,35 +184,146 @@ export default function VendorDashboardPage() {
 
       // Wait for user to be loaded if not ready yet
       if (!user?.id) {
-        console.log("User not ready yet, waiting...");
+        console.log("⏳ [DASHBOARD] User not ready yet, waiting...");
         setIsLoading(false);
         return;
       }
 
-      // Check if vendor has completed onboarding
-      if (user.userType === "vendor") {
-        const response = await fetch("/api/vendor/onboarding", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-        });
+      console.log("🔵 [DASHBOARD] Checking onboarding status for user:", {
+        userId: user.id,
+        userType: user.userType,
+        email: user.email,
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (!data.onboardingCompleted) {
-            setShowOnboarding(true);
+      // Redirect customers to home page
+      if (user.userType === "customer") {
+        console.log(
+          "⚠️ [DASHBOARD] Customer trying to access vendor dashboard, redirecting...",
+        );
+        alert(
+          "This page is only accessible to vendors. Please sign up as a vendor to access this feature.",
+        );
+        router.push("/" as Route);
+        return;
+      }
+
+      // Only allow vendors and admins
+      if (user.userType !== "vendor" && user.userType !== "admin") {
+        console.log("⚠️ [DASHBOARD] Unauthorized user type:", user.userType);
+        router.push("/signin" as Route);
+        return;
+      }
+
+      // Check vendor approval status first
+      if (user.userType === "vendor") {
+        console.log(
+          "🔵 [DASHBOARD] Fetching vendor profile with vendorId:",
+          user.id,
+        );
+
+        // CRITICAL FIX: Must pass vendorId as query parameter
+        const profileResponse = await fetch(
+          `/api/vendor/profile?vendorId=${user.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+            },
+          },
+        );
+
+        console.log(
+          "🔵 [DASHBOARD] Profile response status:",
+          profileResponse.status,
+        );
+
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          console.log("🔵 [DASHBOARD] Profile data received:", {
+            status: profileData.status,
+            businessName: profileData.businessName,
+            onboardingCompleted: profileData.onboardingCompleted,
+          });
+
+          setVendorStatus(profileData.status); // Store vendor status
+
+          // CRITICAL: If vendor is not approved, show pending/rejected screen and STOP
+          // Do NOT show onboarding wizard for unapproved vendors
+          if (profileData.status === "pending_approval") {
+            console.log(
+              "⏸️ [DASHBOARD] Vendor status is pending_approval, showing pending screen",
+            );
             setIsLoading(false);
-            return;
+            return; // Stop here, will show pending approval UI
           }
+
+          // If vendor is rejected or suspended
+          if (
+            profileData.status === "rejected" ||
+            profileData.status === "suspended"
+          ) {
+            console.log(
+              "❌ [DASHBOARD] Vendor status is rejected/suspended, showing appropriate message",
+            );
+            setIsLoading(false);
+            return; // Will show appropriate message
+          }
+
+          // ONLY if vendor is approved, check onboarding status
+          if (profileData.status === "approved") {
+            console.log(
+              "✅ [DASHBOARD] Vendor is approved, checking onboarding completion",
+            );
+
+            const response = await fetch("/api/vendor/onboarding", {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+              },
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              console.log("🔵 [DASHBOARD] Onboarding status:", {
+                completed: data.onboardingCompleted,
+              });
+
+              if (!data.onboardingCompleted) {
+                console.log(
+                  "📋 [DASHBOARD] Onboarding not completed, showing wizard",
+                );
+                setShowOnboarding(true);
+                setIsLoading(false);
+                return;
+              }
+
+              console.log(
+                "✅ [DASHBOARD] Onboarding completed, loading dashboard data",
+              );
+            }
+          }
+        } else {
+          console.error(
+            "🔴 [DASHBOARD] Failed to fetch vendor profile:",
+            profileResponse.status,
+            await profileResponse.text(),
+          );
+          // If profile fetch fails, show error state
+          setLoadError(
+            "Failed to load your vendor profile. Please try refreshing the page.",
+          );
+          setIsLoading(false);
+          return;
         }
       }
 
       // If onboarding is completed or not needed, load dashboard data
+      console.log("🔵 [DASHBOARD] Loading dashboard data...");
       await loadVendorData();
     } catch (error) {
-      console.error("Error checking onboarding status:", error);
-      // If error, still load dashboard (fallback)
-      await loadVendorData();
+      console.error("🔴 [DASHBOARD] Error checking onboarding status:", error);
+      setLoadError(
+        "An unexpected error occurred. Please try refreshing the page.",
+      );
+      setIsLoading(false);
     }
   };
 
@@ -201,9 +338,27 @@ export default function VendorDashboardPage() {
       const profile = await vendorService.getVendorProfile(uid);
       setVendorProfile(profile);
       if (profile) {
+        // Check if business type is in predefined list
+        const predefinedTypes = [
+          "Salon",
+          "Spa",
+          "Wellness Center",
+          "Beauty Studio",
+          "Massage Parlor",
+          "Hair Studio",
+          "Nail Salon",
+          "Barbershop",
+          "Makeup Studio",
+          "Skin Care Clinic",
+        ];
+        const isCustomType =
+          profile.businessType &&
+          !predefinedTypes.includes(profile.businessType);
+
         setProfileForm({
           businessName: profile.businessName || "",
-          businessType: profile.businessType || "",
+          businessType: isCustomType ? "Other" : profile.businessType || "",
+          customBusinessType: isCustomType ? profile.businessType : "",
           businessAddress: profile.businessAddress?.street || "",
           city: profile.businessAddress?.city || "",
           state: profile.businessAddress?.state || "",
@@ -262,7 +417,11 @@ export default function VendorDashboardPage() {
       // Structure the businessAddress object properly
       const updateData = {
         businessName: profileForm.businessName,
-        businessType: profileForm.businessType,
+        // Use custom business type if "Other" is selected, otherwise use the selected type
+        businessType:
+          profileForm.businessType === "Other"
+            ? profileForm.customBusinessType
+            : profileForm.businessType,
         businessAddress: {
           street: profileForm.businessAddress,
           city: profileForm.city,
@@ -351,6 +510,69 @@ export default function VendorDashboardPage() {
     }
   };
 
+  const handleThumbnailUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    try {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Image size should be less than 5MB");
+        return;
+      }
+
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        alert("Please upload an image file");
+        return;
+      }
+
+      setUploadingImages(true);
+
+      const formData = new FormData();
+      formData.append("thumbnail", file);
+
+      console.log("🔵 [THUMBNAIL] Uploading featured thumbnail...");
+
+      const response = await fetch("/api/vendor/thumbnail", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to upload thumbnail");
+      }
+
+      const data = await response.json();
+      console.log("✅ [THUMBNAIL] Thumbnail uploaded successfully:", data);
+
+      // Update vendor profile with new thumbnail
+      setVendorProfile((prev) =>
+        prev ? { ...prev, profileImage: data.thumbnailUrl } : prev,
+      );
+
+      alert("Featured thumbnail uploaded successfully!");
+
+      // Reset file input
+      event.target.value = "";
+
+      // Reload vendor data to get updated profile
+      await loadVendorData();
+    } catch (error) {
+      console.error("🔴 [THUMBNAIL] Error uploading thumbnail:", error);
+      const errorMessage = getErrorMessage(error);
+      alert(`Failed to upload thumbnail: ${errorMessage}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
   const handleServiceSubmit = async () => {
     try {
       console.log("Submitting service:", serviceForm);
@@ -391,6 +613,8 @@ export default function VendorDashboardPage() {
 
   const handleOnboardingComplete = async () => {
     try {
+      console.log("🔵 [ONBOARDING] Marking onboarding as complete...");
+
       // Mark onboarding as complete
       const response = await fetch("/api/vendor/onboarding", {
         method: "POST",
@@ -403,15 +627,23 @@ export default function VendorDashboardPage() {
         throw new Error("Failed to complete onboarding");
       }
 
-      // Hide onboarding wizard and load dashboard
+      console.log("✅ [ONBOARDING] Onboarding marked as complete");
+
+      // Hide onboarding wizard
       setShowOnboarding(false);
-      await loadVendorData();
+
+      // IMPORTANT: Recheck approval status before showing dashboard
+      // This ensures vendors who completed onboarding but are still pending_approval
+      // will see the pending approval screen instead of the full dashboard
+      console.log(
+        "🔵 [ONBOARDING] Rechecking status after onboarding completion...",
+      );
+      await checkOnboardingStatus();
     } catch (error) {
-      console.error("Error completing onboarding:", error);
+      console.error("🔴 [ONBOARDING] Error completing onboarding:", error);
       alert(`Failed to complete onboarding: ${getErrorMessage(error)}`);
     }
   };
-
   const handleDeleteService = async (serviceId: string) => {
     try {
       console.log("Deleting service:", serviceId);
@@ -590,6 +822,225 @@ export default function VendorDashboardPage() {
     );
   }
 
+  // Check if user is authorized (vendor or admin only)
+  if (user && user.userType !== "vendor" && user.userType !== "admin") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <div className="mb-6">
+            <div className="mx-auto h-20 w-20 bg-orange-500/10 rounded-full flex items-center justify-center">
+              <XCircle className="h-10 w-10 text-orange-500" />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-heading text-foreground mb-4">
+            Access Denied
+          </h1>
+
+          <p className="text-muted-foreground mb-6">
+            This page is only accessible to vendors. Please sign up as a vendor
+            to access the vendor dashboard.
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            <Button
+              onClick={() => router.push("/" as Route)}
+              className="flex items-center gap-2"
+            >
+              Go to Home
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/signup" as Route)}
+              className="flex items-center gap-2"
+            >
+              Sign Up as Vendor
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if profile loading failed
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <div className="mb-6">
+            <div className="mx-auto h-20 w-20 bg-red-500/10 rounded-full flex items-center justify-center">
+              <XCircle className="h-10 w-10 text-red-500" />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-heading text-foreground mb-4">
+            Something Went Wrong
+          </h1>
+
+          <p className="text-muted-foreground mb-6">{loadError}</p>
+
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLoadError(null);
+                setIsLoading(true);
+                checkOnboardingStatus();
+              }}
+              className="flex items-center gap-2"
+            >
+              Try Again
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/" as Route)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={async () => await handleSignOut()}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show pending approval screen for vendors awaiting approval
+  if (vendorStatus === "pending_approval") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <div className="mb-6">
+            <div className="mx-auto h-20 w-20 bg-yellow-500/10 rounded-full flex items-center justify-center">
+              <Clock className="h-10 w-10 text-yellow-500" />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-heading text-foreground mb-4">
+            Account Pending Approval
+          </h1>
+
+          <p className="text-muted-foreground mb-6 text-lg">
+            Thank you for registering as a vendor with BeautyBook!
+          </p>
+
+          <div className="bg-muted/50 rounded-lg p-6 mb-6 text-left">
+            <h3 className="font-semibold text-foreground mb-3">
+              What happens next?
+            </h3>
+            <ul className="space-y-2 text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <span>Our admin team is reviewing your registration</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <span>You'll receive an email notification once approved</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <span>This typically takes 24-48 hours</span>
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-6">
+            If you have any questions, please contact us at{" "}
+            <a
+              href="mailto:support@beautybook.com"
+              className="text-primary hover:underline"
+            >
+              support@beautybook.com
+            </a>
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/" as Route)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={async () => await handleSignOut()}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show rejected/suspended screen
+  if (vendorStatus === "rejected" || vendorStatus === "suspended") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full bg-card rounded-2xl shadow-lg border border-border p-8 text-center">
+          <div className="mb-6">
+            <div className="mx-auto h-20 w-20 bg-red-500/10 rounded-full flex items-center justify-center">
+              <XCircle className="h-10 w-10 text-red-500" />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-heading text-foreground mb-4">
+            {vendorStatus === "rejected"
+              ? "Account Rejected"
+              : "Account Suspended"}
+          </h1>
+
+          <p className="text-muted-foreground mb-6">
+            {vendorStatus === "rejected"
+              ? "Unfortunately, your vendor application was not approved."
+              : "Your vendor account has been suspended."}
+          </p>
+
+          <p className="text-sm text-muted-foreground mb-6">
+            For more information, please contact us at{" "}
+            <a
+              href="mailto:support@beautybook.com"
+              className="text-primary hover:underline"
+            >
+              support@beautybook.com
+            </a>
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/" as Route)}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={async () => await handleSignOut()}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Show onboarding wizard for new vendors
   if (showOnboarding) {
     return (
@@ -623,6 +1074,7 @@ export default function VendorDashboardPage() {
               </Badge>
             </div>
             <div className="flex items-center gap-4">
+              <NotificationBell />
               <Button
                 variant="ghost"
                 onClick={() => router.push("/" as Route)}
@@ -1085,16 +1537,77 @@ export default function VendorDashboardPage() {
                   <h1 className="text-3xl font-heading text-foreground">
                     Staff Management
                   </h1>
+                  <Button
+                    onClick={() => {
+                      // Reset form when adding new staff
+                      setEditingStaff(null);
+                      setStaffForm({
+                        firstName: "",
+                        lastName: "",
+                        email: "",
+                        phone: "",
+                        specialization: [],
+                        services: [],
+                        schedule: {
+                          monday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            breaks: [],
+                          },
+                          tuesday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            breaks: [],
+                          },
+                          wednesday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            breaks: [],
+                          },
+                          thursday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            breaks: [],
+                          },
+                          friday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "18:00",
+                            breaks: [],
+                          },
+                          saturday: {
+                            isAvailable: true,
+                            startTime: "09:00",
+                            endTime: "17:00",
+                            breaks: [],
+                          },
+                          sunday: {
+                            isAvailable: false,
+                            startTime: "09:00",
+                            endTime: "17:00",
+                            breaks: [],
+                          },
+                        },
+                      });
+                      setIsStaffDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Staff Member
+                  </Button>
                   <Dialog
                     open={isStaffDialogOpen}
-                    onOpenChange={setIsStaffDialogOpen}
+                    onOpenChange={(open) => {
+                      setIsStaffDialogOpen(open);
+                      if (!open) {
+                        setEditingStaff(null);
+                      }
+                    }}
                   >
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Staff Member
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>
@@ -1106,77 +1619,104 @@ export default function VendorDashboardPage() {
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="firstName">First Name</Label>
+                            <Label htmlFor="staff-firstName">First Name</Label>
                             <Input
-                              id="firstName"
-                              value={staffForm.firstName || ""}
-                              onChange={(e) =>
+                              id="staff-firstName"
+                              name="firstName"
+                              value={staffForm.firstName}
+                              onChange={(e) => {
+                                console.log(
+                                  "First name changed:",
+                                  e.target.value,
+                                );
                                 setStaffForm({
                                   ...staffForm,
                                   firstName: e.target.value,
-                                })
-                              }
+                                });
+                              }}
                               placeholder="John"
+                              autoComplete="off"
                             />
                           </div>
                           <div>
-                            <Label htmlFor="lastName">Last Name</Label>
+                            <Label htmlFor="staff-lastName">Last Name</Label>
                             <Input
-                              id="lastName"
-                              value={staffForm.lastName || ""}
-                              onChange={(e) =>
+                              id="staff-lastName"
+                              name="lastName"
+                              value={staffForm.lastName}
+                              onChange={(e) => {
+                                console.log(
+                                  "Last name changed:",
+                                  e.target.value,
+                                );
                                 setStaffForm({
                                   ...staffForm,
                                   lastName: e.target.value,
-                                })
-                              }
+                                });
+                              }}
                               placeholder="Doe"
+                              autoComplete="off"
                             />
                           </div>
                         </div>
                         <div>
-                          <Label htmlFor="email">Email</Label>
+                          <Label htmlFor="staff-email">Email</Label>
                           <Input
-                            id="email"
+                            id="staff-email"
+                            name="email"
                             type="email"
-                            value={staffForm.email || ""}
-                            onChange={(e) =>
+                            value={staffForm.email}
+                            onChange={(e) => {
+                              console.log("Email changed:", e.target.value);
                               setStaffForm({
                                 ...staffForm,
                                 email: e.target.value,
-                              })
-                            }
+                              });
+                            }}
                             placeholder="john.doe@example.com"
+                            autoComplete="off"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="phone">Phone</Label>
+                          <Label htmlFor="staff-phone">Phone</Label>
                           <Input
-                            id="phone"
-                            value={staffForm.phone || ""}
-                            onChange={(e) =>
+                            id="staff-phone"
+                            name="phone"
+                            value={staffForm.phone}
+                            onChange={(e) => {
+                              console.log("Phone changed:", e.target.value);
                               setStaffForm({
                                 ...staffForm,
                                 phone: e.target.value,
-                              })
-                            }
+                              });
+                            }}
                             placeholder="+91 9876543210"
+                            autoComplete="off"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="specialization">Specialization</Label>
+                          <Label htmlFor="staff-specialization">
+                            Specialization
+                          </Label>
                           <Input
-                            id="specialization"
+                            id="staff-specialization"
+                            name="specialization"
                             value={staffForm.specialization.join(", ")}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              console.log(
+                                "Specialization changed:",
+                                e.target.value,
+                              );
                               setStaffForm({
                                 ...staffForm,
                                 specialization: e.target.value
-                                  .split(", ")
-                                  .filter((s) => s.trim()),
-                              })
-                            }
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter((s) => s),
+                              });
+                            }}
                             placeholder="Hair Styling, Massage, Facial"
+                            autoComplete="off"
                           />
                         </div>
 
@@ -1509,18 +2049,51 @@ export default function VendorDashboardPage() {
                       </div>
                       <div>
                         <Label htmlFor="businessType">Business Type</Label>
-                        <Input
-                          id="businessType"
+                        <Select
                           value={profileForm.businessType || ""}
-                          onChange={(e) =>
+                          onValueChange={(value) => {
                             setProfileForm({
                               ...profileForm,
-                              businessType: e.target.value,
-                            })
-                          }
-                          required
-                        />
+                              businessType: value,
+                              // Clear custom input if switching away from "Other"
+                              customBusinessType:
+                                value !== "Other"
+                                  ? ""
+                                  : profileForm.customBusinessType,
+                            });
+                          }}
+                        >
+                          <SelectTrigger id="businessType">
+                            <SelectValue placeholder="Select business type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {businessTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
+                      {profileForm.businessType === "Other" && (
+                        <div>
+                          <Label htmlFor="customBusinessType">
+                            Specify Business Type
+                          </Label>
+                          <Input
+                            id="customBusinessType"
+                            placeholder="Enter your business type"
+                            value={profileForm.customBusinessType || ""}
+                            onChange={(e) =>
+                              setProfileForm({
+                                ...profileForm,
+                                customBusinessType: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="businessAddress">
@@ -1619,9 +2192,85 @@ export default function VendorDashboardPage() {
                       />
                     </div>
 
+                    {/* Featured Thumbnail Image Section */}
+                    <div className="space-y-4 border-t pt-6">
+                      <div>
+                        <Label className="text-lg font-semibold">
+                          Featured Thumbnail
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          This image will be displayed as your business
+                          thumbnail on the home page and in search results.
+                          Choose a high-quality image that best represents your
+                          business.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Current Thumbnail Display */}
+                        {vendorProfile?.profileImage && (
+                          <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden border-2 border-primary">
+                            <img
+                              src={vendorProfile.profileImage}
+                              alt="Current featured thumbnail"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 left-2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-semibold">
+                              Current Thumbnail
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Upload New Thumbnail */}
+                        <div className="flex items-center gap-4">
+                          <label
+                            htmlFor="thumbnail-upload"
+                            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg cursor-pointer hover:bg-primary/90 transition-colors"
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                            {uploadingImages
+                              ? "Uploading..."
+                              : vendorProfile?.profileImage
+                              ? "Change Thumbnail"
+                              : "Upload Thumbnail"}
+                          </label>
+                          <input
+                            id="thumbnail-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleThumbnailUpload}
+                            disabled={uploadingImages}
+                            className="hidden"
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            Recommended: 1200x800px, max 5MB
+                          </span>
+                        </div>
+
+                        {!vendorProfile?.profileImage && (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-muted/30">
+                            <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-muted-foreground text-sm">
+                              No featured thumbnail set yet.
+                            </p>
+                            <p className="text-muted-foreground text-xs mt-1">
+                              Upload a featured image to make your business
+                              stand out!
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Business Images Section */}
-                    <div className="space-y-4">
-                      <Label>Business Images</Label>
+                    <div className="space-y-4 border-t pt-6">
+                      <Label className="text-lg font-semibold">
+                        Business Gallery Images
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload multiple images to showcase your business,
+                        services, and facilities.
+                      </p>
                       <div className="space-y-4">
                         {/* Upload Button */}
                         <div className="flex items-center gap-4">

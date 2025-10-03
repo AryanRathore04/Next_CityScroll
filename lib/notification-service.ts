@@ -321,7 +321,7 @@ export class NotificationService {
         .populate("customerId", "firstName lastName email phone")
         .populate("vendorId", "businessName email phone")
         .populate("serviceId", "name duration price")
-        .populate("staffId", "name");
+        .populate("staffId", "firstName lastName");
 
       if (!booking) {
         throw new Error("Booking not found");
@@ -332,6 +332,9 @@ export class NotificationService {
       const service = booking.serviceId;
       const staff = booking.staffId;
 
+      // Get staff name
+      const staffName = staff ? `${staff.firstName} ${staff.lastName}` : null;
+
       const bookingDate = format(
         new Date(booking.datetime),
         "EEEE, MMMM d, yyyy",
@@ -339,14 +342,14 @@ export class NotificationService {
       const bookingTime = format(new Date(booking.datetime), "h:mm a");
 
       // Send to customer
-      await this.createNotification({
+      const customerNotification = await this.createNotification({
         recipientId: customer._id,
         type: "booking_confirmation",
         title: "Booking Confirmed!",
         message: `Your booking for ${service.name} at ${
           vendor.businessName
         } on ${bookingDate} at ${bookingTime} has been confirmed.${
-          staff ? ` Your service will be provided by ${staff.name}.` : ""
+          staffName ? ` Your service will be provided by ${staffName}.` : ""
         }`,
         channels: ["email", "in_app"],
         emailSubject: "Booking Confirmation - CityScroll",
@@ -356,21 +359,27 @@ export class NotificationService {
           bookingTime,
           serviceName: service.name,
           vendorName: vendor.businessName,
-          staffName: staff?.name,
+          staffName: staffName,
           totalPrice: booking.totalPrice,
           url: `${process.env.NEXT_PUBLIC_APP_URL}/bookings/${booking._id}`,
         },
       });
 
+      logger.info("Customer notification created", {
+        notificationId: customerNotification._id,
+        recipientId: customer._id,
+        recipientType: "customer",
+      });
+
       // Send to vendor
-      await this.createNotification({
+      const vendorNotification = await this.createNotification({
         recipientId: vendor._id,
         type: "booking_confirmation",
         title: "New Booking Received",
         message: `New booking from ${customer.firstName} ${
           customer.lastName
         } for ${service.name} on ${bookingDate} at ${bookingTime}.${
-          staff ? ` Assigned to ${staff.name}.` : ""
+          staffName ? ` Assigned to ${staffName}.` : ""
         }`,
         channels: ["email", "in_app"],
         emailSubject: "New Booking - CityScroll",
@@ -380,15 +389,23 @@ export class NotificationService {
           serviceName: service.name,
           bookingDate,
           bookingTime,
-          staffName: staff?.name,
+          staffName: staffName,
           url: `${process.env.NEXT_PUBLIC_APP_URL}/vendor-dashboard/bookings/${booking._id}`,
         },
+      });
+
+      logger.info("Vendor notification created", {
+        notificationId: vendorNotification._id,
+        recipientId: vendor._id,
+        recipientType: "vendor",
       });
 
       logger.info("Booking confirmation notifications sent", {
         bookingId: booking._id,
         customerId: customer._id,
         vendorId: vendor._id,
+        customerNotificationId: customerNotification._id,
+        vendorNotificationId: vendorNotification._id,
       });
     } catch (error) {
       logger.error("Failed to send booking confirmation", {
