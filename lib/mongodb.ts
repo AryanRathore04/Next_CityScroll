@@ -47,6 +47,12 @@ export async function connectDB() {
 
     const opts = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      family: 4, // Use IPv4, skip trying IPv6
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      tlsAllowInvalidHostnames: false,
     };
 
     cached.promise = mongoose

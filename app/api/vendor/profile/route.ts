@@ -7,52 +7,42 @@ import {
   validateInput,
   sanitizeObject,
 } from "@/lib/validation";
+import { serverLogger as logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-// Get vendor profile (requires authentication)
-async function getVendorProfileHandler(request: NextRequest) {
+// Get vendor profile (public for viewing, no auth required)
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const vendorId = searchParams.get("vendorId");
-  const currentUser = (request as any).user;
 
-  // If no vendorId provided, use current user's ID
-  const targetVendorId = vendorId || currentUser?.id;
-
-  if (!targetVendorId) {
+  if (!vendorId) {
     return NextResponse.json({ error: "Vendor ID required" }, { status: 400 });
-  }
-
-  // Ensure vendors can only access their own profile unless user is admin
-  if (currentUser.userType !== "admin" && currentUser.id !== targetVendorId) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
   // Handle test scenarios and demo vendor
   if (
-    targetVendorId === "test" ||
-    targetVendorId.startsWith("test-") ||
-    targetVendorId === "demo-vendor"
+    vendorId === "test" ||
+    vendorId.startsWith("test-") ||
+    vendorId === "demo-vendor"
   ) {
     return NextResponse.json({
-      id: targetVendorId,
+      _id: vendorId,
       businessName:
-        targetVendorId === "demo-vendor"
-          ? "Demo Spa & Wellness"
-          : "Test Business",
+        vendorId === "demo-vendor" ? "Demo Spa & Wellness" : "Test Business",
       businessType: "Spa",
-      businessAddress:
-        targetVendorId === "demo-vendor"
-          ? "456 Demo Street, Mumbai"
-          : "123 Test Street",
-      city: targetVendorId === "demo-vendor" ? "Mumbai" : "Test City",
+      businessAddress: {
+        street:
+          vendorId === "demo-vendor" ? "456 Demo Street" : "123 Test Street",
+        city: vendorId === "demo-vendor" ? "Mumbai" : "Test City",
+        state: "Maharashtra",
+        zipCode: "400001",
+      },
       phone: "+91 9876543210",
       email:
-        targetVendorId === "demo-vendor"
-          ? "demo@example.com"
-          : "test@example.com",
+        vendorId === "demo-vendor" ? "demo@example.com" : "test@example.com",
       description:
-        targetVendorId === "demo-vendor"
+        vendorId === "demo-vendor"
           ? "Demo spa and wellness center for testing"
           : "Test business for automated testing",
       verified: true,
@@ -68,9 +58,12 @@ async function getVendorProfileHandler(request: NextRequest) {
     await connectDB();
     const User = (await import("../../../../models/User")).default;
 
-    const vendor = await User.findById(targetVendorId).select("-password");
+    const vendor = await User.findById(vendorId).select(
+      "-password -refreshToken",
+    );
 
     if (!vendor) {
+      logger.info("Vendor not found", { vendorId });
       return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
@@ -81,26 +74,33 @@ async function getVendorProfileHandler(request: NextRequest) {
       );
     }
 
+    logger.info("Vendor profile retrieved", {
+      vendorId,
+      businessName: vendor.businessName,
+    });
+
     return NextResponse.json({
-      id: vendor._id.toString(),
+      _id: vendor._id.toString(),
       email: vendor.email,
       firstName: vendor.firstName,
       lastName: vendor.lastName,
       businessName: vendor.businessName,
       businessType: vendor.businessType,
       businessAddress: vendor.businessAddress,
-      city: vendor.city,
       phone: vendor.phone,
       description: vendor.description,
       verified: vendor.verified,
       status: vendor.status,
       rating: vendor.rating,
       totalBookings: vendor.totalBookings,
+      profileImage: vendor.profileImage,
+      images: vendor.images || [],
+      amenities: [],
       createdAt: vendor.createdAt,
       updatedAt: vendor.updatedAt,
     });
   } catch (error) {
-    console.error("Database error:", error);
+    logger.error("Database error fetching vendor profile", { error, vendorId });
     return NextResponse.json(
       { error: "Failed to fetch vendor profile" },
       { status: 500 },
@@ -176,9 +176,22 @@ async function updateVendorProfileHandler(request: NextRequest) {
     }
 
     // Update the profile
-    await User.findByIdAndUpdate(vendorId, {
-      ...updateData,
-      updatedAt: new Date(),
+    // If businessAddress is being updated, merge it with existing data
+    const updatePayload: any = { ...updateData, updatedAt: new Date() };
+
+    if (updateData.businessAddress) {
+      // Merge with existing businessAddress to preserve fields not being updated
+      updatePayload.businessAddress = {
+        ...vendor.businessAddress,
+        ...updateData.businessAddress,
+      };
+    }
+
+    await User.findByIdAndUpdate(vendorId, updatePayload);
+
+    logger.info("Vendor profile updated", {
+      vendorId,
+      updatedFields: Object.keys(updateData),
     });
 
     return NextResponse.json({
@@ -194,8 +207,7 @@ async function updateVendorProfileHandler(request: NextRequest) {
   }
 }
 
-// Export with authentication requirements
-export const GET = requireAuth(getVendorProfileHandler);
+// Export with authentication requirements (PUT only - GET is public)
 export const PUT = requirePermission(
   PERMISSIONS.UPDATE_OWN_PROFILE,
   updateVendorProfileHandler,

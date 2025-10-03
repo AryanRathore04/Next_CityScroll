@@ -20,8 +20,16 @@ export interface VendorProfile {
   uid: string;
   businessName: string;
   businessType: string;
-  businessAddress: string;
-  city: string;
+  businessAddress: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
   phone: string;
   email: string;
   description: string;
@@ -265,9 +273,7 @@ class VendorServiceApi {
     return [];
   }
 
-  async getVendorAnalytics(
-    vendorId: string,
-  ): Promise<{
+  async getVendorAnalytics(vendorId: string): Promise<{
     totalBookings: number;
     pendingBookings: number;
     completedBookings: number;

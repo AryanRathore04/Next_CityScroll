@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: RouteParams) {
 
     const Staff = (await import("../../../../models/Staff")).default;
     const staff = await Staff.findById(params.id)
-      .populate("serviceIds", "name price duration category")
+      .populate("services", "name price duration category")
       .populate("vendorId", "businessName firstName lastName");
 
     if (!staff) {
@@ -113,13 +113,13 @@ export async function PUT(request: NextRequest, context: RouteParams) {
     const validatedData = validateRequest(staffUpdateSchema, body);
 
     // Verify service IDs if provided
-    if (validatedData.serviceIds && validatedData.serviceIds.length > 0) {
+    if (validatedData.services && validatedData.services.length > 0) {
       const services = await Service.find({
-        _id: { $in: validatedData.serviceIds },
+        _id: { $in: validatedData.services },
         vendorId: staff.vendorId,
       });
 
-      if (services.length !== validatedData.serviceIds.length) {
+      if (services.length !== validatedData.services.length) {
         throw new ValidationError(
           "One or more services do not exist or do not belong to this vendor",
         );
@@ -154,7 +154,7 @@ export async function PUT(request: NextRequest, context: RouteParams) {
 
     // Return populated staff data
     const updatedStaff = await Staff.findById(staff._id)
-      .populate("serviceIds", "name price duration category")
+      .populate("services", "name price duration category")
       .populate("vendorId", "businessName firstName lastName");
 
     return NextResponse.json({

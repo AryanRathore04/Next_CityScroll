@@ -31,8 +31,12 @@ export interface IUser extends Document {
   rating?: number;
   totalBookings?: number;
   profileImage?: string;
+  images?: string[]; // Array of image URLs for vendor galleries
+  onboardingCompleted?: boolean; // Track if vendor completed onboarding
   description?: string;
   refreshToken?: string; // store latest refresh token for validation and revocation
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,7 +58,6 @@ const UserSchema = new Schema<IUser>(
     email: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
       trim: true,
       maxlength: 100,
@@ -120,6 +123,8 @@ const UserSchema = new Schema<IUser>(
       default: 0,
     },
     profileImage: String,
+    images: [String], // Array of image URLs for vendor galleries
+    onboardingCompleted: { type: Boolean, default: false },
     description: {
       type: String,
       maxlength: 1000,
@@ -127,6 +132,14 @@ const UserSchema = new Schema<IUser>(
     refreshToken: {
       type: String,
       select: false, // exclude from queries by default for security
+    },
+    passwordResetToken: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
     },
   },
   {

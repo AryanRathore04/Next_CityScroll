@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/lib/middleware";
 import {
   AIRecommendationService,
   type RecommendationContext,
@@ -7,9 +8,16 @@ import { serverLogger as logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await verifyAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
     const {
-      userId,
       currentLocation,
       sessionType,
       occasion,
@@ -17,15 +25,8 @@ export async function POST(request: NextRequest) {
       limit = 10,
     } = body;
 
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: "User ID is required" },
-        { status: 400 },
-      );
-    }
-
     const context: RecommendationContext = {
-      userId,
+      userId: user.id,
       currentLocation,
       sessionType,
       occasion,
@@ -38,6 +39,12 @@ export async function POST(request: NextRequest) {
         limit,
       );
 
+    logger.info("AI recommendations generated", {
+      userId: user.id,
+      count: recommendations.length,
+      context: sessionType,
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -47,7 +54,11 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error("Error generating AI recommendations", { error });
+    logger.error("Error generating AI recommendations", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
       {
         success: false,
@@ -61,21 +72,21 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await verifyAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Authentication required" },
+        { status: 401 },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
     const lat = searchParams.get("lat");
     const lng = searchParams.get("lng");
     const limit = parseInt(searchParams.get("limit") || "10");
 
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: "User ID is required" },
-        { status: 400 },
-      );
-    }
-
     const context: RecommendationContext = {
-      userId,
+      userId: user.id,
       currentLocation:
         lat && lng
           ? {
@@ -91,6 +102,11 @@ export async function GET(request: NextRequest) {
         limit,
       );
 
+    logger.info("AI recommendations fetched", {
+      userId: user.id,
+      count: recommendations.length,
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -99,7 +115,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error("Error getting AI recommendations", { error });
+    logger.error("Error getting AI recommendations", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
       {
         success: false,

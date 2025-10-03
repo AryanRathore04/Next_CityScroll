@@ -2,53 +2,45 @@ import { z } from "zod";
 import { serverLogger as logger } from "./logger";
 
 // Enhanced user registration schema with stronger validation
-export const registerSchema = z
-  .object({
-    email: z.string().email("Invalid email address").max(100),
-    password: z
-      .string()
-      .min(12, "Password must be at least 12 characters")
-      .max(128, "Password must be less than 128 characters")
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-        "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character",
-      ),
-    userType: z.enum(["customer", "vendor"]), // Remove admin from public registration
-    firstName: z
-      .string()
-      .min(1, "First name is required")
-      .max(50, "First name must be less than 50 characters")
-      .regex(
-        /^[A-Za-z\s'-]+$/,
-        "First name can only contain letters, spaces, apostrophes, and hyphens",
-      ),
-    lastName: z
-      .string()
-      .min(1, "Last name is required")
-      .max(50, "Last name must be less than 50 characters")
-      .regex(
-        /^[A-Za-z\s'-]+$/,
-        "Last name can only contain letters, spaces, apostrophes, and hyphens",
-      ),
-    businessName: z.string().max(100).optional(),
-    phone: z
-      .string()
-      .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
-      .optional(),
-  })
-  .refine(
-    (data) => {
-      // Business name is required for vendors
-      if (data.userType === "vendor" && !data.businessName) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: "Business name is required for vendor accounts",
-      path: ["businessName"],
-    },
-  );
+export const registerSchema = z.object({
+  email: z.string().email("Invalid email address").max(100),
+  password: z
+    .string()
+    .min(12, "Password must be at least 12 characters")
+    .max(128, "Password must be less than 128 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      "Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character",
+    ),
+  userType: z.enum(["customer", "vendor"]), // Remove admin from public registration
+  firstName: z
+    .string()
+    .min(1, "First name is required")
+    .max(50, "First name must be less than 50 characters")
+    .regex(
+      /^[A-Za-z\s'-]+$/,
+      "First name can only contain letters, spaces, apostrophes, and hyphens",
+    ),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .max(50, "Last name must be less than 50 characters")
+    .regex(
+      /^[A-Za-z\s'-]+$/,
+      "Last name can only contain letters, spaces, apostrophes, and hyphens",
+    ),
+  businessName: z.string().max(100).optional(),
+  businessType: z.string().max(50).optional(),
+  businessAddress: z.string().max(200).optional(),
+  city: z.string().max(50).optional(),
+  description: z.string().max(1000).optional(),
+  phone: z
+    .string()
+    .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
+    .optional(),
+});
+// Note: Business details (businessName, businessType, etc.) are now collected
+// during the onboarding wizard after signup, so they're truly optional here
 
 // User signin schema
 export const signinSchema = z.object({
@@ -68,8 +60,24 @@ export const profileUpdateSchema = z.object({
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().min(1).max(50).optional(),
   businessName: z.string().max(100).optional(),
+  businessType: z.string().max(50).optional(),
+  businessAddress: z
+    .object({
+      street: z.string().max(200).optional(),
+      city: z.string().max(50).optional(),
+      state: z.string().max(50).optional(),
+      zipCode: z.string().max(10).optional(),
+      coordinates: z
+        .object({
+          latitude: z.number().optional(),
+          longitude: z.number().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   phone: z.string().max(20).optional(),
-  address: z.string().max(200).optional(),
+  description: z.string().max(1000).optional(),
+  amenities: z.array(z.string()).optional(),
 });
 
 // Service creation schema
@@ -189,260 +197,94 @@ export function sanitizeObject(obj: any): any {
   return obj;
 }
 
-// Staff creation schema
-export const staffCreationSchema = z.object({
-  name: z
+// Break time schema for staff schedule
+const breakTimeSchema = z.object({
+  startTime: z
     .string()
-    .min(1, "Staff name is required")
-    .max(100, "Name must be less than 100 characters")
+    .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
+  endTime: z
+    .string()
+    .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
+});
+
+// Day schedule schema
+const dayScheduleSchema = z.object({
+  isAvailable: z.boolean().default(true),
+  startTime: z
+    .string()
+    .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
+  endTime: z
+    .string()
+    .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
+  breaks: z.array(breakTimeSchema).default([]),
+});
+
+// Staff creation schema - matches Staff model structure
+export const staffCreationSchema = z.object({
+  firstName: z
+    .string()
+    .min(1, "First name is required")
+    .max(50, "First name must be less than 50 characters")
     .regex(
       /^[A-Za-z\s'-]+$/,
-      "Name can only contain letters, spaces, apostrophes, and hyphens",
+      "First name can only contain letters, spaces, apostrophes, and hyphens",
+    ),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .max(50, "Last name must be less than 50 characters")
+    .regex(
+      /^[A-Za-z\s'-]+$/,
+      "Last name can only contain letters, spaces, apostrophes, and hyphens",
     ),
   email: z
     .string()
     .email("Invalid email address")
-    .max(100, "Email must be less than 100 characters"),
+    .max(100, "Email must be less than 100 characters")
+    .optional(),
   phone: z
     .string()
     .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
     .optional(),
-  position: z
-    .string()
-    .min(1, "Position is required")
-    .max(100, "Position must be less than 100 characters"),
-  serviceIds: z.array(z.string()).optional(),
-  schedule: z.object({
-    monday: z
-      .object({
-        enabled: z.boolean().default(true),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    tuesday: z
-      .object({
-        enabled: z.boolean().default(true),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    wednesday: z
-      .object({
-        enabled: z.boolean().default(true),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    thursday: z
-      .object({
-        enabled: z.boolean().default(true),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    friday: z
-      .object({
-        enabled: z.boolean().default(true),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    saturday: z
-      .object({
-        enabled: z.boolean().default(false),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-    sunday: z
-      .object({
-        enabled: z.boolean().default(false),
-        startTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        endTime: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          ),
-        breakStart: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-        breakEnd: z
-          .string()
-          .regex(
-            /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
-            "Invalid time format (HH:MM)",
-          )
-          .optional(),
-      })
-      .optional(),
-  }),
+  specialization: z.array(z.string()).default([]),
+  services: z.array(z.string()).default([]), // Array of service IDs
+  schedule: z
+    .object({
+      monday: dayScheduleSchema.optional(),
+      tuesday: dayScheduleSchema.optional(),
+      wednesday: dayScheduleSchema.optional(),
+      thursday: dayScheduleSchema.optional(),
+      friday: dayScheduleSchema.optional(),
+      saturday: dayScheduleSchema.optional(),
+      sunday: dayScheduleSchema.optional(),
+    })
+    .optional(),
+  avatar: z.string().max(500).optional(),
+  bio: z.string().max(1000).optional(),
+  experience: z.number().min(0).max(50).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  commission: z.number().min(0).max(100).optional(),
   vendorId: z.string().min(1).optional(), // Optional for admin use
 });
 
 // Staff update schema (all fields optional)
 export const staffUpdateSchema = z.object({
-  name: z
+  firstName: z
     .string()
-    .min(1, "Staff name is required")
-    .max(100, "Name must be less than 100 characters")
+    .min(1, "First name is required")
+    .max(50, "First name must be less than 50 characters")
     .regex(
       /^[A-Za-z\s'-]+$/,
-      "Name can only contain letters, spaces, apostrophes, and hyphens",
+      "First name can only contain letters, spaces, apostrophes, and hyphens",
+    )
+    .optional(),
+  lastName: z
+    .string()
+    .min(1, "Last name is required")
+    .max(50, "Last name must be less than 50 characters")
+    .regex(
+      /^[A-Za-z\s'-]+$/,
+      "Last name can only contain letters, spaces, apostrophes, and hyphens",
     )
     .optional(),
   email: z
@@ -454,14 +296,15 @@ export const staffUpdateSchema = z.object({
     .string()
     .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format")
     .optional(),
-  position: z
-    .string()
-    .min(1, "Position is required")
-    .max(100, "Position must be less than 100 characters")
-    .optional(),
-  serviceIds: z.array(z.string()).optional(),
+  specialization: z.array(z.string()).optional(),
+  services: z.array(z.string()).optional(),
   schedule: staffCreationSchema.shape.schedule.optional(),
   isActive: z.boolean().optional(),
+  avatar: z.string().max(500).optional(),
+  bio: z.string().max(1000).optional(),
+  experience: z.number().min(0).max(50).optional(),
+  hourlyRate: z.number().min(0).optional(),
+  commission: z.number().min(0).max(100).optional(),
 });
 
 // Combined sanitization and validation function

@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import twilio from "twilio";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import User from "@/models/User";
@@ -47,6 +48,16 @@ export class NotificationService {
   ) {
     try {
       await connectDB();
+
+      // Validate recipientId is a valid ObjectId
+      if (!mongoose.Types.ObjectId.isValid(notificationData.recipientId)) {
+        logger.error("Invalid recipientId format", {
+          recipientId: notificationData.recipientId,
+        });
+        throw new Error(
+          `Invalid recipientId format: ${notificationData.recipientId}`,
+        );
+      }
 
       // Get recipient details
       const recipient = await User.findById(notificationData.recipientId);
@@ -496,6 +507,14 @@ export class NotificationService {
   ) {
     try {
       await connectDB();
+
+      // Validate userId is a valid ObjectId
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        logger.error("Invalid userId format in getUserNotifications", {
+          userId,
+        });
+        throw new Error(`Invalid userId format: ${userId}`);
+      }
 
       const notifications = await (Notification as any).getUserNotifications(
         userId,

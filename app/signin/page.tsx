@@ -49,11 +49,13 @@ export default function SignInPage() {
   useEffect(() => {
     // If already signed in and profile present, redirect
     if (user && userProfile) {
-      router.push(
-        (userProfile.userType === "vendor"
+      const redirectPath =
+        userProfile.userType === "admin"
+          ? "/admin"
+          : userProfile.userType === "vendor"
           ? "/vendor-dashboard"
-          : "/") as Route,
-      );
+          : "/";
+      router.push(redirectPath as Route);
       return;
     }
     const t = setTimeout(() => setIsPageLoading(false), 600);
@@ -78,9 +80,13 @@ export default function SignInPage() {
       setShowWelcome(true);
 
       setTimeout(() => {
-        router.push(
-          (profile.userType === "vendor" ? "/vendor-dashboard" : "/") as Route,
-        );
+        const redirectPath =
+          profile.userType === "admin"
+            ? "/admin"
+            : profile.userType === "vendor"
+            ? "/vendor-dashboard"
+            : "/";
+        router.push(redirectPath as Route);
       }, 2000);
     } catch (error: any) {
       showError(error?.message || "Failed to sign in");

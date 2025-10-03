@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -56,8 +57,18 @@ interface Booking {
   createdAt: string;
 }
 
+interface PopularArea {
+  city: string;
+  state: string;
+  bookingCount: number;
+  revenue: number;
+  vendorCount: number;
+  averageRating: number;
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingVendors, setPendingVendors] = useState<any[]>([]);
@@ -73,27 +84,28 @@ export default function AdminDashboardPage() {
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
   const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [popularAreas, setPopularAreas] = useState<PopularArea[]>([]);
+  const [areasLoading, setAreasLoading] = useState(true);
 
   // Check admin access
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    const userStr = localStorage.getItem("user");
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
 
-    if (!token || !userStr) {
+    // If not logged in, redirect to signin
+    if (!user || !userProfile) {
       router.push("/signin" as Route);
       return;
     }
 
-    try {
-      const user = JSON.parse(userStr);
-      if (user.userType !== "admin") {
-        router.push("/" as Route);
-        return;
-      }
-    } catch (error) {
-      router.push("/signin" as Route);
+    // If not admin, redirect to home
+    if (userProfile.userType !== "admin") {
+      router.push("/" as Route);
+      return;
     }
-  }, [router]);
+  }, [user, userProfile, authLoading, router]);
 
   // Fetch dashboard stats
   useEffect(() => {
@@ -139,6 +151,25 @@ export default function AdminDashboardPage() {
     };
 
     fetchBookings();
+  }, []);
+
+  // Fetch popular areas for analytics
+  useEffect(() => {
+    const fetchPopularAreas = async () => {
+      try {
+        const response = await fetch("/api/analytics/popular-areas");
+        if (response.ok) {
+          const data = await response.json();
+          setPopularAreas(data.data?.cities || []);
+        }
+      } catch (error) {
+        console.error("Error fetching popular areas:", error);
+      } finally {
+        setAreasLoading(false);
+      }
+    };
+
+    fetchPopularAreas();
   }, []);
 
   // Load pending vendors
@@ -235,6 +266,25 @@ export default function AdminDashboardPage() {
         return "bg-spa-stone text-spa-charcoal/60";
     }
   };
+
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-hero">
+        <div className="text-center">
+          <div className="h-12 w-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Leaf className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-spa-charcoal/60">Loading admin dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render dashboard if not admin (will redirect via useEffect)
+  if (!user || !userProfile || userProfile.userType !== "admin") {
+    return null;
+  }
 
   return (
     <div
@@ -875,22 +925,132 @@ export default function AdminDashboardPage() {
                   darkMode ? "text-white" : "text-spa-charcoal"
                 }`}
               >
-                Platform Analytics
+                Popular Areas - Business Expansion Insights
               </h2>
-              <div className="text-center py-20">
-                <TrendingUp
-                  className={`h-16 w-16 mx-auto mb-4 ${
-                    darkMode ? "text-white/20" : "text-spa-charcoal/20"
-                  }`}
+              {areasLoading ? (
+                <LoadingEmptyState
+                  title="Loading analytics..."
+                  description="Analyzing popular areas across the platform"
                 />
-                <p
-                  className={`${
-                    darkMode ? "text-white/60" : "text-spa-charcoal/60"
-                  } font-light`}
-                >
-                  Advanced analytics and reporting features coming soon
-                </p>
-              </div>
+              ) : popularAreas.length === 0 ? (
+                <EmptyState
+                  icon={TrendingUp}
+                  title="No Data Available"
+                  description="Not enough booking data to generate area insights yet"
+                  size="md"
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr
+                        className={`border-b ${
+                          darkMode ? "border-white/10" : "border-spa-stone/10"
+                        }`}
+                      >
+                        {[
+                          "Rank",
+                          "City",
+                          "State",
+                          "Bookings",
+                          "Revenue",
+                          "Vendors",
+                          "Rating",
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className={`text-left p-4 font-medium text-sm ${
+                              darkMode
+                                ? "text-white/80"
+                                : "text-spa-charcoal/80"
+                            }`}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {popularAreas.map((area, index) => (
+                        <tr
+                          key={`${area.city}-${area.state}`}
+                          className={`border-b ${
+                            darkMode ? "border-white/5" : "border-spa-stone/5"
+                          } hover:bg-spa-stone/5`}
+                        >
+                          <td
+                            className={`p-4 font-medium text-sm ${
+                              darkMode ? "text-white" : "text-spa-charcoal"
+                            }`}
+                          >
+                            {index + 1}
+                          </td>
+                          <td
+                            className={`p-4 text-sm ${
+                              darkMode
+                                ? "text-white/80"
+                                : "text-spa-charcoal/80"
+                            }`}
+                          >
+                            {area.city}
+                          </td>
+                          <td
+                            className={`p-4 text-sm ${
+                              darkMode
+                                ? "text-white/80"
+                                : "text-spa-charcoal/80"
+                            }`}
+                          >
+                            {area.state}
+                          </td>
+                          <td
+                            className={`p-4 text-sm ${
+                              darkMode ? "text-white" : "text-spa-charcoal"
+                            }`}
+                          >
+                            {area.bookingCount.toLocaleString()}
+                          </td>
+                          <td
+                            className={`p-4 text-sm font-medium ${
+                              darkMode ? "text-white" : "text-spa-charcoal"
+                            }`}
+                          >
+                            ₹
+                            {area.revenue >= 100000
+                              ? `${(area.revenue / 100000).toFixed(1)}L`
+                              : area.revenue.toLocaleString()}
+                          </td>
+                          <td
+                            className={`p-4 text-sm ${
+                              darkMode ? "text-white" : "text-spa-charcoal"
+                            }`}
+                          >
+                            {area.vendorCount}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-1">
+                              <Star
+                                className={`h-4 w-4 ${
+                                  area.averageRating >= 4
+                                    ? "fill-spa-gold text-spa-gold"
+                                    : "text-spa-stone/50"
+                                }`}
+                              />
+                              <span
+                                className={`text-sm ${
+                                  darkMode ? "text-white" : "text-spa-charcoal"
+                                }`}
+                              >
+                                {area.averageRating.toFixed(1)}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

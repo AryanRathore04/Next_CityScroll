@@ -48,14 +48,29 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const Service = (await import("../../../../models/Service")).default;
 
+    logger.info("Fetching services for vendor", { vendorId });
     const services = (await Service.find({ vendorId: vendorId }).lean()) as
       | (Partial<IService> & {
           _id: string;
           vendor?: Partial<IUser> | string;
         })[]
       | [];
+
+    logger.info("Services query result", {
+      vendorId,
+      count: services.length,
+      sampleService: services[0]
+        ? {
+            id: services[0]._id,
+            name: services[0].name,
+            vendorId: services[0].vendorId,
+          }
+        : null,
+    });
+
     // If no services found, return an explicit empty array
     if (!Array.isArray(services) || services.length === 0) {
+      logger.warn("No services found for vendor", { vendorId });
       return NextResponse.json([], { status: 200 });
     }
 

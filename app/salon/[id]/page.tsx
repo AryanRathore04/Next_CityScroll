@@ -6,6 +6,13 @@ import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BookingForm } from "@/components/booking/BookingForm";
 import { AirbnbHeader } from "@/components/nav/airbnb-header";
 import { BottomNav } from "@/components/nav/bottom-nav";
 import {
@@ -20,7 +27,36 @@ import {
   Calendar,
   CheckCircle,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
+
+interface VendorData {
+  _id: string;
+  businessName: string;
+  businessType?: string;
+  businessAddress?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  };
+  rating?: number;
+  totalBookings?: number;
+  profileImage?: string;
+  description?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface ServiceData {
+  id: string;
+  name: string;
+  duration: number;
+  price: number;
+  description?: string;
+  category?: string;
+  active: boolean;
+}
 
 interface Review {
   _id: string;
@@ -111,13 +147,18 @@ export default function VendorProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [vendor, setVendor] = useState<VendorData | null>(null);
+  const [services, setServices] = useState<ServiceData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [selectedService, setSelectedService] = useState<any>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [vendorStats, setVendorStats] = useState<VendorStats | null>(null);
   const [isLoadingReviews, setIsLoadingReviews] = useState(true);
   const [vendorId, setVendorId] = useState<string | null>(null);
+  const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
   const router = useRouter();
 
   // Resolve params and fetch vendor data
@@ -127,25 +168,73 @@ export default function VendorProfilePage({
         const resolvedParams = await params;
         setVendorId(resolvedParams.id);
 
+        // Fetch vendor profile
+        setLoading(true);
+        const vendorResponse = await fetch(
+          `/api/vendor/profile?vendorId=${resolvedParams.id}`,
+        );
+        if (vendorResponse.ok) {
+          const vendorData = await vendorResponse.json();
+          setVendor(vendorData);
+        }
+
+        // Fetch services
+        setLoadingServices(true);
+        const servicesResponse = await fetch(
+          `/api/vendor/services?vendorId=${resolvedParams.id}`,
+        );
+        if (servicesResponse.ok) {
+          const servicesData = await servicesResponse.json();
+          setServices(servicesData || []);
+        }
+
         // Fetch reviews
         setIsLoadingReviews(true);
-        const response = await fetch(
+        const reviewsResponse = await fetch(
           `/api/reviews?vendorId=${resolvedParams.id}&limit=10&sortBy=createdAt`,
         );
-        if (response.ok) {
-          const data = await response.json();
+        if (reviewsResponse.ok) {
+          const data = await reviewsResponse.json();
           setReviews(data.reviews);
           setVendorStats(data.vendorStats);
         }
       } catch (error) {
         console.error("Failed to fetch vendor data:", error);
       } finally {
+        setLoading(false);
+        setLoadingServices(false);
         setIsLoadingReviews(false);
       }
     };
 
     initializeVendor();
   }, [params]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-coral-500 mx-auto mb-4" />
+          <p className="text-gray-600">Loading vendor profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">
+            Vendor Not Found
+          </h1>
+          <Button onClick={() => router.push("/salons" as Route)}>
+            Browse Salons
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -227,44 +316,66 @@ export default function VendorProfilePage({
                   <h2 className="text-2xl font-semibold text-gray-700 mb-6">
                     Our Treatments
                   </h2>
-                  <div className="grid gap-4">
-                    {services.map((service) => (
-                      <div
-                        key={service.id}
-                        className="bg-white rounded-xl p-6 airbnb-shadow border border-gray-200 hover:airbnb-shadow-hover transition-all"
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                              {service.name}
-                            </h3>
-                            <p className="text-gray-500 text-sm mb-3">
-                              {service.description}
-                            </p>
-                            <div className="flex items-center gap-4 text-sm">
-                              <div className="flex items-center gap-1 text-gray-500">
-                                <Clock className="h-4 w-4" />
-                                <span>{service.duration}</span>
-                              </div>
-                              <div className="text-lg font-semibold text-coral-500">
-                                {service.price}
+                  {loadingServices ? (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-coral-500 mx-auto mb-4" />
+                      <p className="text-gray-600">Loading services...</p>
+                    </div>
+                  ) : services.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <p className="text-gray-600 text-lg mb-2">
+                        No services available
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        This vendor hasn't added any services yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {services.map((service) => (
+                        <div
+                          key={service.id}
+                          className="bg-white rounded-xl p-6 airbnb-shadow border border-gray-200 hover:airbnb-shadow-hover transition-all"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                                {service.name}
+                              </h3>
+                              <p className="text-gray-500 text-sm mb-3">
+                                {service.description || "Professional service"}
+                              </p>
+                              <div className="flex items-center gap-4 text-sm">
+                                <div className="flex items-center gap-1 text-gray-500">
+                                  <Clock className="h-4 w-4" />
+                                  <span>{service.duration} mins</span>
+                                </div>
+                                <div className="text-lg font-semibold text-coral-500">
+                                  ₹{service.price.toLocaleString()}
+                                </div>
                               </div>
                             </div>
+                            <Button
+                              variant="coral"
+                              className="rounded-lg px-6"
+                              onClick={() => {
+                                setSelectedService({
+                                  id: service.id,
+                                  name: service.name,
+                                  duration: `${service.duration} mins`,
+                                  price: `₹${service.price.toLocaleString()}`,
+                                  description: service.description,
+                                });
+                                setIsBookingDialogOpen(true);
+                              }}
+                            >
+                              Book Now
+                            </Button>
                           </div>
-                          <Button
-                            variant="coral"
-                            className="rounded-lg px-6"
-                            onClick={() => {
-                              setSelectedService(service.id);
-                              router.push("/booking" as Route);
-                            }}
-                          >
-                            Book Now
-                          </Button>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 
@@ -485,12 +596,14 @@ export default function VendorProfilePage({
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-gray-500" />
-                  <div className="text-sm text-gray-700">+91 98765 43210</div>
+                  <div className="text-sm text-gray-700">
+                    {vendor.phone || "Not available"}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="h-4 w-4 text-gray-500" />
                   <div className="text-sm text-gray-700">
-                    info@serenityspa.com
+                    {vendor.email || "Not available"}
                   </div>
                 </div>
               </div>
@@ -533,7 +646,18 @@ export default function VendorProfilePage({
                 <MapPin className="h-8 w-8 text-gray-400" />
               </div>
               <p className="text-sm text-gray-600 leading-relaxed">
-                123 Wellness Street, Connaught Place, New Delhi - 110001
+                {vendor.businessAddress?.street ||
+                vendor.businessAddress?.city ||
+                vendor.businessAddress?.state
+                  ? [
+                      vendor.businessAddress?.street,
+                      vendor.businessAddress?.city,
+                      vendor.businessAddress?.state,
+                      vendor.businessAddress?.zipCode,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")
+                  : "Address not available"}
               </p>
               <Button variant="outline" size="sm" className="w-full mt-3">
                 Get Directions
@@ -545,6 +669,34 @@ export default function VendorProfilePage({
 
       {/* Mobile Bottom Navigation */}
       <BottomNav />
+
+      {/* Booking Dialog */}
+      <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Book {selectedService?.name}</DialogTitle>
+          </DialogHeader>
+          {selectedService && vendor && (
+            <BookingForm
+              service={{
+                _id: selectedService.id,
+                name: selectedService.name,
+                description: selectedService.description,
+                price: parseFloat(selectedService.price.replace(/[^\d.]/g, "")),
+                duration: parseInt(selectedService.duration),
+                category: "Spa",
+              }}
+              vendor={{
+                _id: vendor._id,
+                businessName: vendor.businessName,
+                firstName: vendor.businessName,
+                lastName: "",
+              }}
+              onBack={() => setIsBookingDialogOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

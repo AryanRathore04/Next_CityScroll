@@ -182,12 +182,16 @@ export class GeolocationService {
       // Build aggregation pipeline
       const pipeline: any[] = [];
 
-      // Match vendors only
+      // Match vendors only (approved vendors)
       pipeline.push({
         $match: {
           userType: "vendor",
-          status: "active",
+          status: "approved",
         },
+      });
+
+      logger.info("Salon search pipeline match stage", {
+        matchStage: pipeline[0],
       });
 
       // Add location-based filtering if coordinates provided
@@ -301,21 +305,21 @@ export class GeolocationService {
                   branches: [
                     {
                       case: { $lte: [{ $avg: "$services.price" }, 50] },
-                      then: "$",
+                      then: "₹",
                     },
                     {
                       case: { $lte: [{ $avg: "$services.price" }, 100] },
-                      then: "$$",
+                      then: "₹₹",
                     },
                     {
                       case: { $lte: [{ $avg: "$services.price" }, 200] },
-                      then: "$$$",
+                      then: "₹₹₹",
                     },
                   ],
-                  default: "$$$$",
+                  default: "₹₹₹₹",
                 },
               },
-              else: "$$",
+              else: "₹₹",
             },
           },
         },
@@ -397,6 +401,17 @@ export class GeolocationService {
 
       // Execute aggregation
       const salons = await User.aggregate(pipeline);
+
+      logger.info("Salon search results", {
+        totalFound: salons.length,
+        sampleSalon: salons[0]
+          ? {
+              id: salons[0]._id,
+              name: salons[0].businessName,
+              city: salons[0].businessAddress?.city,
+            }
+          : null,
+      });
 
       return {
         salons: salons.map((salon: any) => ({

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { serverLogger as logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +145,9 @@ export async function GET() {
         status: "normal",
       });
     } catch (error) {
-      console.error("Error fetching real metrics:", error);
+      logger.error("Error fetching real metrics", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     // Set status based on thresholds
@@ -172,14 +175,28 @@ export async function GET() {
       }
     });
 
+    logger.info("Metrics fetched successfully", {
+      metricCategories: Object.keys(metrics).length,
+    });
+
     return NextResponse.json(metrics, {
       headers: {
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {
+    logger.error("Failed to fetch metrics", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
-      { error: "Failed to fetch metrics", message: (error as Error).message },
+      {
+        error: "Failed to fetch metrics",
+        message: (error as Error).message,
+        code: "METRICS_FETCH_ERROR",
+        timestamp: new Date().toISOString(),
+      },
       { status: 500 },
     );
   }

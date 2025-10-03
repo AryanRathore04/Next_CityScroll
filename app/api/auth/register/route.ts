@@ -53,15 +53,29 @@ async function registerHandler(request: Request) {
     }
     console.log("🟢 [REGISTER] Input validation successful");
 
-    const { email, password, userType, firstName, lastName, businessName } =
-      validation.data;
+    const {
+      email,
+      password,
+      userType,
+      firstName,
+      lastName,
+      businessName,
+      businessType,
+      businessAddress,
+      city,
+      description,
+      phone,
+    } = validation.data;
 
     console.log("🔵 [REGISTER] Registration data:", {
       email: email.toLowerCase(),
       userType,
       firstName,
       lastName,
+      phone: phone || "N/A",
       businessName: businessName || "N/A",
+      businessType: businessType || "N/A",
+      city: city || "N/A",
       hasPassword: !!password,
     });
 
@@ -112,20 +126,39 @@ async function registerHandler(request: Request) {
     console.log("🟢 [REGISTER] Password hashed successfully");
 
     // Create user
-    const userDataToCreate = {
+    const userDataToCreate: any = {
       firstName,
       lastName,
       email: email.toLowerCase(),
       password: hashedPassword,
       userType,
-      businessName: userType === "vendor" ? businessName : undefined,
+      phone,
       verified: false,
       status: userType === "vendor" ? "pending_approval" : "active",
     };
+
+    // Add vendor-specific fields
+    if (userType === "vendor") {
+      userDataToCreate.businessName = businessName;
+      userDataToCreate.businessType = businessType;
+      userDataToCreate.description = description;
+
+      // Create business address object if address or city provided
+      if (businessAddress || city) {
+        userDataToCreate.businessAddress = {
+          street: businessAddress || "",
+          city: city || "",
+          state: "",
+          zipCode: "",
+        };
+      }
+    }
+
     console.log("🔵 [REGISTER] Creating new user in database...", {
       email: userDataToCreate.email,
       userType: userDataToCreate.userType,
       status: userDataToCreate.status,
+      hasBusinessFields: userType === "vendor",
     });
 
     const newUser = await User.create(userDataToCreate);
@@ -176,7 +209,11 @@ async function registerHandler(request: Request) {
           userType: safeUser.userType,
           firstName: safeUser.firstName,
           lastName: safeUser.lastName,
+          phone: safeUser.phone,
           businessName: safeUser.businessName,
+          businessType: safeUser.businessType,
+          businessAddress: safeUser.businessAddress,
+          description: safeUser.description,
           status: safeUser.status,
         },
         accessToken,

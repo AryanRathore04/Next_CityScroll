@@ -57,10 +57,29 @@ export function NotificationBell({ className }: { className?: string }) {
     try {
       setLoading(true);
 
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        // User not logged in, skip fetching
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(
         "/api/notifications?limit=5&unreadOnly=false",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
       );
-      if (!response.ok) throw new Error("Failed to fetch notifications");
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error ||
+            `Failed to fetch notifications (${response.status})`,
+        );
+      }
 
       const result = await response.json();
       if (result.success) {
@@ -68,7 +87,10 @@ export function NotificationBell({ className }: { className?: string }) {
         setUnreadCount(result.data.unreadCount || 0);
       }
     } catch (error) {
-      console.error("Error fetching notifications:", error);
+      console.error(
+        "Error fetching notifications:",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setLoading(false);
     }
@@ -76,10 +98,16 @@ export function NotificationBell({ className }: { className?: string }) {
 
   const markAsRead = async (notificationId: string) => {
     try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
       const response = await fetch(
         `/api/notifications/${notificationId}/read`,
         {
           method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
       );
 

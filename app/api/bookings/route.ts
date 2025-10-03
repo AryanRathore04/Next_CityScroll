@@ -28,6 +28,86 @@ type LeanService = Partial<IService> & { vendor?: Partial<IUser> | string };
 
 export const dynamic = "force-dynamic";
 
+async function getBookingsHandler(request: NextRequest) {
+  try {
+    // Authenticated user
+    const currentUser = (
+      request as unknown as { user?: { id: string; userType: string } }
+    ).user;
+    if (!currentUser) {
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 401 },
+      );
+    }
+
+    // Connect to database
+    try {
+      await connectDB();
+    } catch (dbError) {
+      logger.error("Database connection failed", { error: dbError });
+      return NextResponse.json(
+        {
+          error: "Service temporarily unavailable",
+          code: "DATABASE_CONNECTION_ERROR",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 503 },
+      );
+    }
+
+    const Booking = (await import("../../../models/Booking")).default;
+
+    // Build query based on user type
+    const query: any = {};
+    if (currentUser.userType === "vendor") {
+      query.vendorId = currentUser.id;
+    } else {
+      query.customerId = currentUser.id;
+    }
+
+    // Fetch bookings with populated fields
+    const bookings = await Booking.find(query)
+      .populate("serviceId", "name price duration")
+      .populate("vendorId", "businessName businessAddress")
+      .populate("customerId", "firstName lastName email")
+      .populate("staffId", "name")
+      .sort({ datetime: -1 })
+      .lean();
+
+    logger.info("Bookings fetched successfully", {
+      userId: currentUser.id,
+      userType: currentUser.userType,
+      count: bookings.length,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        bookings,
+        count: bookings.length,
+      },
+    });
+  } catch (error) {
+    logger.error("Fetch bookings error:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return NextResponse.json(
+      {
+        error: "Failed to fetch bookings",
+        code: "BOOKINGS_FETCH_ERROR",
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
+    );
+  }
+}
+
 async function createBookingHandler(request: NextRequest) {
   let session: mongoose.ClientSession | null = null;
 
@@ -438,4 +518,5 @@ async function createBookingHandler(request: NextRequest) {
   }
 }
 
+export const GET = requireAuth(getBookingsHandler as any);
 export const POST = requireAuth(createBookingHandler as any);

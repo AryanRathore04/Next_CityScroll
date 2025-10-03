@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
     }
 
     const staff = await Staff.find({ vendorId })
-      .populate("serviceIds", "name price duration")
-      .sort({ name: 1 });
+      .populate("services", "name price duration")
+      .sort({ firstName: 1, lastName: 1 });
 
     logger.info("Staff list retrieved", {
       vendorId,
@@ -109,13 +109,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify all service IDs exist and belong to the vendor
-    if (validatedData.serviceIds && validatedData.serviceIds.length > 0) {
+    if (validatedData.services && validatedData.services.length > 0) {
       const services = await Service.find({
-        _id: { $in: validatedData.serviceIds },
+        _id: { $in: validatedData.services },
         vendorId,
       });
 
-      if (services.length !== validatedData.serviceIds.length) {
+      if (services.length !== validatedData.services.length) {
         throw new ValidationError(
           "One or more services do not exist or do not belong to this vendor",
         );
@@ -155,7 +155,11 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    logger.error("Error creating staff member", { error });
+    logger.error("Error creating staff member", {
+      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
 
     if (error instanceof ValidationError) {
       return NextResponse.json(
@@ -171,8 +175,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Return detailed error message in development
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { success: false, error: "Internal server error" },
+      { success: false, error: errorMessage },
       { status: 500 },
     );
   }

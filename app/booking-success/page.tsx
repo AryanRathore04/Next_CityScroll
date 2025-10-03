@@ -24,12 +24,12 @@ interface BookingDetails {
   serviceName: string;
   vendorName: string;
   datetime: string;
-  duration: number;
-  price: number;
+  serviceDuration: number;
+  totalPrice: number;
   status: string;
   paymentStatus: string;
   customerName: string;
-  address: string;
+  vendorAddress: string;
 }
 
 function BookingSuccessContent() {
@@ -257,7 +257,7 @@ function BookingSuccessContent() {
                 <Clock className="w-5 h-5 text-gray-400 mt-0.5" />
                 <div>
                   <p className="font-medium text-gray-900">
-                    {bookingDetails.duration} minutes
+                    {bookingDetails.serviceDuration} minutes
                   </p>
                   <p className="text-sm text-gray-600">Session duration</p>
                 </div>
@@ -267,7 +267,7 @@ function BookingSuccessContent() {
                 <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
                 <div>
                   <p className="font-medium text-gray-900">
-                    {bookingDetails.address || "Address details"}
+                    {bookingDetails.vendorAddress || "Address details"}
                   </p>
                   <p className="text-sm text-gray-600">Venue location</p>
                 </div>
@@ -285,7 +285,7 @@ function BookingSuccessContent() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Service Fee</span>
                 <span className="font-medium text-gray-900">
-                  ₹{bookingDetails.price}
+                  ₹{bookingDetails.totalPrice}
                 </span>
               </div>
 
@@ -309,7 +309,9 @@ function BookingSuccessContent() {
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex justify-between items-center text-lg font-semibold">
                   <span>Total Paid</span>
-                  <span className="text-primary">₹{bookingDetails.price}</span>
+                  <span className="text-primary">
+                    ₹{bookingDetails.totalPrice}
+                  </span>
                 </div>
               </div>
             </div>

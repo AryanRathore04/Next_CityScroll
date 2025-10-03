@@ -85,7 +85,7 @@ export function AirbnbHeader({ className }: AirbnbHeaderProps) {
                 Find Salons
               </Link>
               <Link
-                href="/booking"
+                href="/bookings"
                 className="text-gray-700 hover:text-coral-600 font-medium transition-colors"
               >
                 My Bookings
@@ -293,7 +293,7 @@ export function AirbnbHeader({ className }: AirbnbHeaderProps) {
               Find Salons
             </Link>
             <Link
-              href="/booking"
+              href="/bookings"
               className="text-gray-700 hover:text-coral-600 font-medium transition-colors text-sm"
             >
               My Bookings

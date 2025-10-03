@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { connectDB } from "@/lib/mongodb";
+import mongoose from "mongoose";
 
 interface VendorMetadata {
   businessName: string;
@@ -21,6 +22,14 @@ async function getVendorMetadata(
   vendorId: string,
 ): Promise<VendorMetadata | null> {
   try {
+    // Validate vendorId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
+      console.error(
+        `Invalid vendor ID format: ${vendorId}. Expected a valid MongoDB ObjectId.`,
+      );
+      return null;
+    }
+
     // Connect to database
     await connectDB();
     const User = (await import("../../../models/User")).default;

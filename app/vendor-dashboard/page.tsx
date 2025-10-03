@@ -39,14 +39,19 @@ import {
   ArrowLeft,
   LogOut,
   DollarSign,
+  Upload,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { OnboardingWizard } from "@/components/vendor/OnboardingWizard";
 
 export default function VendorDashboardPage() {
   const router = useRouter();
   const { user, userProfile, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(
     null,
@@ -62,6 +67,8 @@ export default function VendorDashboardPage() {
     averageRating: 0,
     totalReviews: 0,
   });
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [vendorImages, setVendorImages] = useState<string[]>([]);
 
   const [serviceForm, setServiceForm] = useState({
     name: "",
@@ -134,16 +141,18 @@ export default function VendorDashboardPage() {
     businessType: "",
     businessAddress: "",
     city: "",
+    state: "",
+    zipCode: "",
     phone: "",
     description: "",
     amenities: [] as string[],
   });
 
   useEffect(() => {
-    loadVendorData();
+    checkOnboardingStatus();
   }, [user]); // Reload when user changes
 
-  const loadVendorData = async () => {
+  const checkOnboardingStatus = async () => {
     try {
       setIsLoading(true);
 
@@ -154,20 +163,57 @@ export default function VendorDashboardPage() {
         return;
       }
 
-      const uid = user.id;
+      // Check if vendor has completed onboarding
+      if (user.userType === "vendor") {
+        const response = await fetch("/api/vendor/onboarding", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (!data.onboardingCompleted) {
+            setShowOnboarding(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      // If onboarding is completed or not needed, load dashboard data
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error checking onboarding status:", error);
+      // If error, still load dashboard (fallback)
+      await loadVendorData();
+    }
+  };
+
+  const loadVendorData = async () => {
+    try {
+      setIsLoading(true);
+
+      const uid = user?.id;
+      if (!uid) return;
+
       console.log("Loading vendor data for user:", uid);
       const profile = await vendorService.getVendorProfile(uid);
       setVendorProfile(profile);
       if (profile) {
         setProfileForm({
-          businessName: profile.businessName,
-          businessType: profile.businessType,
-          businessAddress: profile.businessAddress,
-          city: profile.city,
-          phone: profile.phone,
-          description: profile.description,
+          businessName: profile.businessName || "",
+          businessType: profile.businessType || "",
+          businessAddress: profile.businessAddress?.street || "",
+          city: profile.businessAddress?.city || "",
+          state: profile.businessAddress?.state || "",
+          zipCode: profile.businessAddress?.zipCode || "",
+          phone: profile.phone || "",
+          description: profile.description || "",
           amenities: profile.amenities || [],
         });
+        // Load vendor images
+        setVendorImages(profile.images || []);
       }
       const vendorServices = await vendorService.getVendorServices(uid);
       setServices(vendorServices);
@@ -213,11 +259,22 @@ export default function VendorDashboardPage() {
       const uid = user?.id || "demo-vendor";
       console.log("Updating profile for user:", uid);
 
-      await vendorService.updateVendorProfile(uid, {
-        ...profileForm,
-        uid,
-        email: vendorProfile?.email || "",
-      } as any);
+      // Structure the businessAddress object properly
+      const updateData = {
+        businessName: profileForm.businessName,
+        businessType: profileForm.businessType,
+        businessAddress: {
+          street: profileForm.businessAddress,
+          city: profileForm.city,
+          state: profileForm.state,
+          zipCode: profileForm.zipCode,
+        },
+        phone: profileForm.phone,
+        description: profileForm.description,
+        amenities: profileForm.amenities,
+      };
+
+      await vendorService.updateVendorProfile(uid, updateData as any);
 
       console.log("Profile updated successfully");
       await loadVendorData();
@@ -225,6 +282,72 @@ export default function VendorDashboardPage() {
       console.error("Error updating profile:", error);
       const errorMessage = getErrorMessage(error);
       alert(`Failed to update profile: ${errorMessage}`);
+    }
+  };
+
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    try {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      setUploadingImages(true);
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("images", files[i]);
+      }
+
+      const response = await fetch("/api/vendor/images", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload images");
+      }
+
+      const data = await response.json();
+      setVendorImages(data.images || []);
+      alert("Images uploaded successfully!");
+
+      // Reset file input
+      event.target.value = "";
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      const errorMessage = getErrorMessage(error);
+      alert(`Failed to upload images: ${errorMessage}`);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const handleDeleteImage = async (imageUrl: string) => {
+    try {
+      const response = await fetch("/api/vendor/images", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: JSON.stringify({ imageUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete image");
+      }
+
+      const data = await response.json();
+      setVendorImages(data.images || []);
+      alert("Image deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      const errorMessage = getErrorMessage(error);
+      alert(`Failed to delete image: ${errorMessage}`);
     }
   };
 
@@ -263,6 +386,29 @@ export default function VendorDashboardPage() {
           editingService ? "update" : "create"
         } service: ${errorMessage}`,
       );
+    }
+  };
+
+  const handleOnboardingComplete = async () => {
+    try {
+      // Mark onboarding as complete
+      const response = await fetch("/api/vendor/onboarding", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to complete onboarding");
+      }
+
+      // Hide onboarding wizard and load dashboard
+      setShowOnboarding(false);
+      await loadVendorData();
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      alert(`Failed to complete onboarding: ${getErrorMessage(error)}`);
     }
   };
 
@@ -313,7 +459,8 @@ export default function VendorDashboardPage() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to create staff member");
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create staff member");
         }
         console.log("Staff member created successfully");
       }
@@ -440,6 +587,17 @@ export default function VendorDashboardPage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
+    );
+  }
+
+  // Show onboarding wizard for new vendors
+  if (showOnboarding) {
+    return (
+      <OnboardingWizard
+        userId={user?.id || ""}
+        userEmail={user?.email || ""}
+        onComplete={handleOnboardingComplete}
+      />
     );
   }
 
@@ -736,7 +894,7 @@ export default function VendorDashboardPage() {
                           <Label htmlFor="serviceName">Service Name</Label>
                           <Input
                             id="serviceName"
-                            value={serviceForm.name}
+                            value={serviceForm.name || ""}
                             onChange={(e) =>
                               setServiceForm({
                                 ...serviceForm,
@@ -752,7 +910,7 @@ export default function VendorDashboardPage() {
                           </Label>
                           <Textarea
                             id="serviceDescription"
-                            value={serviceForm.description}
+                            value={serviceForm.description || ""}
                             onChange={(
                               e: React.ChangeEvent<HTMLTextAreaElement>,
                             ) =>
@@ -769,7 +927,7 @@ export default function VendorDashboardPage() {
                             <Label htmlFor="serviceCategory">Category</Label>
                             <Input
                               id="serviceCategory"
-                              value={serviceForm.category}
+                              value={serviceForm.category || ""}
                               onChange={(e) =>
                                 setServiceForm({
                                   ...serviceForm,
@@ -893,12 +1051,12 @@ export default function VendorDashboardPage() {
                           onClick={() => {
                             setEditingService(service);
                             setServiceForm({
-                              name: service.name,
-                              description: service.description,
-                              category: service.category,
-                              duration: service.duration,
-                              price: service.price,
-                              active: service.active,
+                              name: service.name || "",
+                              description: service.description || "",
+                              category: service.category || "",
+                              duration: service.duration || 30,
+                              price: service.price || 0,
+                              active: service.active ?? true,
                             });
                             setIsServiceDialogOpen(true);
                           }}
@@ -951,7 +1109,7 @@ export default function VendorDashboardPage() {
                             <Label htmlFor="firstName">First Name</Label>
                             <Input
                               id="firstName"
-                              value={staffForm.firstName}
+                              value={staffForm.firstName || ""}
                               onChange={(e) =>
                                 setStaffForm({
                                   ...staffForm,
@@ -965,7 +1123,7 @@ export default function VendorDashboardPage() {
                             <Label htmlFor="lastName">Last Name</Label>
                             <Input
                               id="lastName"
-                              value={staffForm.lastName}
+                              value={staffForm.lastName || ""}
                               onChange={(e) =>
                                 setStaffForm({
                                   ...staffForm,
@@ -981,7 +1139,7 @@ export default function VendorDashboardPage() {
                           <Input
                             id="email"
                             type="email"
-                            value={staffForm.email}
+                            value={staffForm.email || ""}
                             onChange={(e) =>
                               setStaffForm({
                                 ...staffForm,
@@ -995,7 +1153,7 @@ export default function VendorDashboardPage() {
                           <Label htmlFor="phone">Phone</Label>
                           <Input
                             id="phone"
-                            value={staffForm.phone}
+                            value={staffForm.phone || ""}
                             onChange={(e) =>
                               setStaffForm({
                                 ...staffForm,
@@ -1339,7 +1497,7 @@ export default function VendorDashboardPage() {
                         <Label htmlFor="businessName">Business Name</Label>
                         <Input
                           id="businessName"
-                          value={profileForm.businessName}
+                          value={profileForm.businessName || ""}
                           onChange={(e) =>
                             setProfileForm({
                               ...profileForm,
@@ -1353,7 +1511,7 @@ export default function VendorDashboardPage() {
                         <Label htmlFor="businessType">Business Type</Label>
                         <Input
                           id="businessType"
-                          value={profileForm.businessType}
+                          value={profileForm.businessType || ""}
                           onChange={(e) =>
                             setProfileForm({
                               ...profileForm,
@@ -1365,16 +1523,19 @@ export default function VendorDashboardPage() {
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="businessAddress">Business Address</Label>
+                      <Label htmlFor="businessAddress">
+                        Business Address (Street)
+                      </Label>
                       <Input
                         id="businessAddress"
-                        value={profileForm.businessAddress}
+                        value={profileForm.businessAddress || ""}
                         onChange={(e) =>
                           setProfileForm({
                             ...profileForm,
                             businessAddress: e.target.value,
                           })
                         }
+                        placeholder="123 Main Street"
                         required
                       />
                     </div>
@@ -1383,13 +1544,46 @@ export default function VendorDashboardPage() {
                         <Label htmlFor="city">City</Label>
                         <Input
                           id="city"
-                          value={profileForm.city}
+                          value={profileForm.city || ""}
                           onChange={(e) =>
                             setProfileForm({
                               ...profileForm,
                               city: e.target.value,
                             })
                           }
+                          placeholder="Mumbai"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="state">State</Label>
+                        <Input
+                          id="state"
+                          value={profileForm.state || ""}
+                          onChange={(e) =>
+                            setProfileForm({
+                              ...profileForm,
+                              state: e.target.value,
+                            })
+                          }
+                          placeholder="Maharashtra"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <Label htmlFor="zipCode">ZIP Code</Label>
+                        <Input
+                          id="zipCode"
+                          value={profileForm.zipCode || ""}
+                          onChange={(e) =>
+                            setProfileForm({
+                              ...profileForm,
+                              zipCode: e.target.value,
+                            })
+                          }
+                          placeholder="400001"
                           required
                         />
                       </div>
@@ -1397,13 +1591,14 @@ export default function VendorDashboardPage() {
                         <Label htmlFor="phone">Phone Number</Label>
                         <Input
                           id="phone"
-                          value={profileForm.phone}
+                          value={profileForm.phone || ""}
                           onChange={(e) =>
                             setProfileForm({
                               ...profileForm,
                               phone: e.target.value,
                             })
                           }
+                          placeholder="+91 9876543210"
                           required
                         />
                       </div>
@@ -1412,7 +1607,7 @@ export default function VendorDashboardPage() {
                       <Label htmlFor="description">Business Description</Label>
                       <Textarea
                         id="description"
-                        value={profileForm.description}
+                        value={profileForm.description || ""}
                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                           setProfileForm({
                             ...profileForm,
@@ -1423,6 +1618,72 @@ export default function VendorDashboardPage() {
                         rows={4}
                       />
                     </div>
+
+                    {/* Business Images Section */}
+                    <div className="space-y-4">
+                      <Label>Business Images</Label>
+                      <div className="space-y-4">
+                        {/* Upload Button */}
+                        <div className="flex items-center gap-4">
+                          <label
+                            htmlFor="image-upload"
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors"
+                          >
+                            <Upload className="h-4 w-4" />
+                            {uploadingImages ? "Uploading..." : "Upload Images"}
+                          </label>
+                          <input
+                            id="image-upload"
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleImageUpload}
+                            disabled={uploadingImages}
+                            className="hidden"
+                          />
+                          <span className="text-sm text-gray-500">
+                            Upload multiple images of your business
+                          </span>
+                        </div>
+
+                        {/* Image Gallery */}
+                        {vendorImages.length > 0 && (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {vendorImages.map((imageUrl, index) => (
+                              <div
+                                key={index}
+                                className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500 transition-colors"
+                              >
+                                <img
+                                  src={imageUrl}
+                                  alt={`Business image ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteImage(imageUrl)}
+                                  className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                  title="Delete image"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {vendorImages.length === 0 && (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                            <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                            <p className="text-gray-500">
+                              No images uploaded yet. Add images to showcase
+                              your business!
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <Button type="submit" className="w-full">
                       Update Profile
                     </Button>

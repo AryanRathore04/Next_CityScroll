@@ -16,11 +16,13 @@ interface Favorite {
   vendorId: {
     _id: string;
     businessName: string;
-    city?: string;
+    businessAddress?: {
+      city?: string;
+    };
     rating?: number;
-    totalReviews?: number;
+    totalBookings?: number;
     businessType?: string;
-    images?: string[];
+    profileImage?: string;
   };
   createdAt: string;
 }
@@ -185,12 +187,12 @@ export default function FavoritesPage() {
                 id={favorite.vendorId._id}
                 name={favorite.vendorId.businessName}
                 image={
-                  favorite.vendorId.images?.[0] ||
+                  favorite.vendorId.profileImage ||
                   "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=400&h=400&fit=crop"
                 }
                 rating={favorite.vendorId.rating || 4.5}
-                reviewCount={favorite.vendorId.totalReviews || 0}
-                location={favorite.vendorId.city || "Location"}
+                reviewCount={favorite.vendorId.totalBookings || 0}
+                location={favorite.vendorId.businessAddress?.city || "Location"}
                 services={[
                   favorite.vendorId.businessType || "Beauty & Wellness",
                 ]}

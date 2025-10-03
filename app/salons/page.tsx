@@ -21,113 +21,24 @@ import {
   Filter,
   Map,
   List,
+  Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const venues = [
-  {
-    id: "1",
-    name: "Serenity Wellness Spa",
-    image:
-      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=400&fit=crop&crop=center",
-    rating: 4.9,
-    reviewCount: 186,
-    location: "Connaught Place, Delhi",
-    services: [
-      "Deep Tissue Massage",
-      "Hot Stone",
-      "Aromatherapy",
-      "Reflexology",
-    ],
-    priceRange: "₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "2",
-    name: "Zen Beauty Lounge",
-    image:
-      "https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=400&h=400&fit=crop&crop=center",
-    rating: 4.8,
-    reviewCount: 234,
-    location: "Bandra West, Mumbai",
-    services: ["Facial Treatment", "Hair Spa", "Manicure", "Pedicure"],
-    priceRange: "₹₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "3",
-    name: "Natural Glow Studio",
-    image:
-      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop&crop=center",
-    rating: 4.7,
-    reviewCount: 156,
-    location: "Koramangala, Bangalore",
-    services: ["Organic Facial", "Natural Hair Care", "Wellness Therapy"],
-    priceRange: "₹₹",
-    isOpen: true,
-  },
-  {
-    id: "4",
-    name: "Tranquil Mind & Body",
-    image:
-      "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=400&h=400&fit=crop&crop=center",
-    rating: 4.8,
-    reviewCount: 198,
-    location: "Cyber City, Gurgaon",
-    services: ["Swedish Massage", "Couples Therapy", "Meditation"],
-    priceRange: "₹₹₹",
-    isOpen: false,
-  },
-  {
-    id: "5",
-    name: "Pure Essence Spa",
-    image:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=center",
-    rating: 4.9,
-    reviewCount: 267,
-    location: "Jubilee Hills, Hyderabad",
-    services: ["Ayurvedic Treatment", "Herbal Therapy", "Detox"],
-    priceRange: "₹₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "6",
-    name: "Harmony Beauty Center",
-    image:
-      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&h=400&fit=crop&crop=center",
-    rating: 4.6,
-    reviewCount: 142,
-    location: "Park Street, Kolkata",
-    services: ["Hair Care", "Skin Treatment", "Nail Care"],
-    priceRange: "₹₹",
-    isOpen: true,
-  },
-  {
-    id: "7",
-    name: "Bliss Wellness Retreat",
-    image:
-      "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=400&h=400&fit=crop&crop=center",
-    rating: 4.9,
-    reviewCount: 321,
-    location: "Vasant Kunj, Delhi",
-    services: ["Hot Stone Massage", "Couples Spa", "Reflexology"],
-    priceRange: "₹₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "8",
-    name: "Urban Oasis Spa",
-    image:
-      "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=400&fit=crop&crop=center",
-    rating: 4.7,
-    reviewCount: 189,
-    location: "Whitefield, Bangalore",
-    services: ["Aromatherapy", "Thai Massage", "Facial"],
-    priceRange: "₹₹₹",
-    isOpen: true,
-  },
-];
+interface Vendor {
+  _id: string;
+  businessName: string;
+  businessType?: string;
+  businessAddress?: {
+    city?: string;
+    state?: string;
+  };
+  rating?: number;
+  totalBookings?: number;
+  profileImage?: string;
+  description?: string;
+}
 
 const quickFilters = [
   { id: "instant", label: "Instant Book", icon: "⚡" },
@@ -144,12 +55,42 @@ const priceFilters = [
 
 export default function SalonsPage() {
   const router = useRouter();
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [selectedPriceFilter, setSelectedPriceFilter] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+
+  const fetchVendors = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/search/salons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limit: 50,
+          sortBy: "rating",
+          sortOrder: "desc",
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setVendors(result.data?.salons || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch vendors:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleFilter = (filterId: string) => {
     setSelectedFilters((prev) =>
@@ -168,14 +109,13 @@ export default function SalonsPage() {
   const hasActiveFilters =
     selectedFilters.length > 0 || selectedPriceFilter || searchQuery;
 
-  const filteredVenues = venues.filter((venue) => {
+  const filteredVenues = vendors.filter((venue) => {
     if (
       searchQuery &&
-      !venue.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !venue.services.some((s) =>
-        s.toLowerCase().includes(searchQuery.toLowerCase()),
-      ) &&
-      !venue.location.toLowerCase().includes(searchQuery.toLowerCase())
+      !venue.businessName.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !venue.businessAddress?.city
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase())
     ) {
       return false;
     }
@@ -409,11 +349,45 @@ export default function SalonsPage() {
         </div>
 
         {/* Venue Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
-          {filteredVenues.map((venue) => (
-            <ServiceCard key={venue.id} {...venue} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-coral-500 mx-auto mb-4" />
+              <p className="text-gray-600">Loading salons...</p>
+            </div>
+          </div>
+        ) : filteredVenues.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600 text-lg">No salons found</p>
+            <Button variant="coral" onClick={clearAllFilters} className="mt-4">
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
+            {filteredVenues.map((venue) => (
+              <ServiceCard
+                key={venue._id}
+                id={venue._id}
+                name={venue.businessName}
+                image={
+                  venue.profileImage ||
+                  "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=400&h=400&fit=crop"
+                }
+                rating={venue.rating || 0}
+                reviewCount={venue.totalBookings || 0}
+                location={
+                  venue.businessAddress?.city ||
+                  venue.businessAddress?.state ||
+                  "Location"
+                }
+                services={[venue.businessType || "Beauty & Wellness"]}
+                priceRange="₹₹₹"
+                isOpen={true}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Load More */}
         {filteredVenues.length >= 8 && (

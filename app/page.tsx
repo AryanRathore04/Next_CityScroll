@@ -47,56 +47,17 @@ const categories = [
   { id: "wellness", emoji: "✨", label: "Wellness", count: "4,300+ places" },
 ];
 
-const featuredServices = [
-  {
-    id: "1",
-    name: "Serenity Wellness Spa",
-    image:
-      "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=400&fit=crop&crop=center",
-    rating: 4.9,
-    reviewCount: 186,
-    location: "Connaught Place, Delhi",
-    services: ["Deep Tissue Massage", "Hot Stone Therapy", "Aromatherapy"],
-    priceRange: "₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "2",
-    name: "Zen Beauty Lounge",
-    image:
-      "https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=400&h=400&fit=crop&crop=center",
-    rating: 4.8,
-    reviewCount: 234,
-    location: "Bandra West, Mumbai",
-    services: ["Facial Treatment", "Hair Spa", "Manicure & Pedicure"],
-    priceRange: "₹₹₹₹",
-    isOpen: true,
-  },
-  {
-    id: "3",
-    name: "Natural Glow Studio",
-    image:
-      "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop&crop=center",
-    rating: 4.7,
-    reviewCount: 156,
-    location: "Koramangala, Bangalore",
-    services: ["Organic Facial", "Natural Hair Care", "Wellness Therapy"],
-    priceRange: "₹₹",
-    isOpen: true,
-  },
-  {
-    id: "4",
-    name: "Elite Hair Studio",
-    image:
-      "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&h=400&fit=crop&crop=center",
-    rating: 4.9,
-    reviewCount: 298,
-    location: "Cyber City, Gurgaon",
-    services: ["Hair Cut & Style", "Hair Color", "Keratin Treatment"],
-    priceRange: "₹₹₹",
-    isOpen: true,
-  },
-];
+interface FeaturedSalon {
+  id: string;
+  name: string;
+  image: string;
+  rating: number;
+  reviewCount: number;
+  location: string;
+  services: string[];
+  priceRange: string;
+  isOpen: boolean;
+}
 
 const experiences = [
   {
@@ -119,35 +80,65 @@ const experiences = [
 
 export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [searchLocation, setSearchLocation] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedService, setSelectedService] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedDuration, setSelectedDuration] = useState("");
+  const [featuredSalons, setFeaturedSalons] = useState<FeaturedSalon[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    // Optimize loading time
-    const timer = setTimeout(() => setIsLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
+    const initializePage = async () => {
+      try {
+        // Fetch featured salons
+        const response = await fetch("/api/search/salons", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            limit: 12,
+            sortBy: "rating",
+            sortOrder: "desc",
+          }),
+        });
 
-  // Debug effect to log state changes
-  useEffect(() => {
-    console.log("Form State Updated:", {
-      searchLocation,
-      selectedService,
-      preferredDate,
-      selectedDate,
-      selectedDuration,
-    });
-  }, [
-    searchLocation,
-    selectedService,
-    preferredDate,
-    selectedDate,
-    selectedDuration,
-  ]);
+        if (response.ok) {
+          const result = await response.json();
+          console.log("API Response:", result);
+          console.log("Salons array:", result.data?.salons);
+          const salons: FeaturedSalon[] = (result.data?.salons || []).map(
+            (vendor: any) => ({
+              id: vendor._id,
+              name: vendor.businessName,
+              image:
+                vendor.profileImage ||
+                "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=400&h=400&fit=crop",
+              rating: vendor.rating || 4.5,
+              reviewCount: vendor.totalBookings || 0,
+              location: vendor.businessAddress?.city
+                ? `${vendor.businessAddress.city}${
+                    vendor.businessAddress.state
+                      ? ", " + vendor.businessAddress.state
+                      : ""
+                  }`
+                : "Location",
+              services: [vendor.businessType || "Beauty & Wellness"],
+              priceRange: "₹₹₹",
+              isOpen: true,
+            }),
+          );
+          console.log("Mapped salons:", salons);
+          setFeaturedSalons(salons);
+        }
+      } catch (error) {
+        console.error("Failed to fetch featured salons:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializePage();
+  }, []);
 
   if (isLoading) {
     return (
@@ -166,275 +157,260 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation Header */}
-      <SimpleHeader />
-      {/* OYO-style Header with Search */}
-      <header className="bg-white shadow-sm">
-        {/* Search Section */}
-        <div className="bg-white">
-          <div className="container mx-auto px-4 py-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Find spa & salon services at best prices
-              {(searchLocation ||
-                selectedService ||
-                preferredDate ||
-                selectedDuration) && (
-                <span className="ml-2 text-sm text-coral-600 font-normal">
-                  •{" "}
-                  {
-                    [
-                      searchLocation,
-                      selectedService,
-                      preferredDate,
-                      selectedDuration,
-                    ].filter(Boolean).length
-                  }{" "}
-                  field(s) filled
-                </span>
-              )}
-            </h2>
+      {/* Navigation Header - Hidden on mobile */}
+      <div className="hidden md:block">
+        <SimpleHeader />
+      </div>
+      {/* Mobile-only Logo Header */}
+      <div className="md:hidden bg-white border-b border-gray-200 py-4">
+        <div className="container mx-auto px-4 flex items-center justify-center">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-coral-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">B</span>
+            </div>
+            <span className="text-xl font-bold text-gray-900">BeautyBook</span>
+          </div>
+        </div>
+      </div>
+      {/* OYO-style Hero Section */}
+      <section className="bg-white py-4 md:py-8 md:bg-gradient-to-br md:from-coral-50 md:to-white">
+        <div className="container mx-auto px-4">
+          {/* Title - Larger on mobile to match OYO */}
+          <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-3 md:mb-2">
+            Find salons & spas at best prices
+          </h1>
+          <p className="text-gray-600 mb-4 md:mb-6 hidden md:block">
+            Book your perfect beauty experience today
+          </p>
 
-            {/* Search Form */}
-            <div className="space-y-4">
-              {/* Location Input */}
-              <div className="relative">
-                <label className="block text-sm text-gray-600 mb-2">
-                  Location
+          {/* OYO-Style Search Card */}
+          <div className="bg-white rounded-2xl md:rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            {/* Universal Search Field - Search by location OR salon name */}
+            <div className="p-4 md:p-4 border-b border-gray-200">
+              <label className="block text-xs md:text-sm font-medium text-gray-500 mb-2">
+                Search Salons & Spas
+              </label>
+              <Input
+                type="text"
+                placeholder="Search by location, salon name, or area (e.g., 'Mumbai' or 'Lakme Salon')"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const params = new URLSearchParams();
+                    if (searchQuery.trim()) params.set("q", searchQuery.trim());
+                    if (selectedService && selectedService !== "all")
+                      params.set("service", selectedService);
+                    if (preferredDate) params.set("date", preferredDate);
+                    if (selectedDuration && selectedDuration !== "any")
+                      params.set("duration", selectedDuration);
+                    const queryString = params.toString();
+                    const url = queryString
+                      ? `/salons?${queryString}`
+                      : "/salons";
+                    router.push(url as Route);
+                  }
+                }}
+                className="w-full h-10 md:h-12 px-0 text-lg md:text-base font-semibold border-0 bg-transparent focus:ring-0 placeholder:text-gray-600 placeholder:font-normal placeholder:opacity-60 focus:placeholder:opacity-0 placeholder:transition-opacity"
+              />
+              <p className="text-xs text-gray-400 mt-2 hidden md:block">
+                💡 Tip: Just type and press Enter to search instantly
+              </p>
+            </div>
+
+            {/* Date and Service Row - Optional Filters */}
+            <div className="grid grid-cols-2 border-b border-gray-200">
+              {/* Date Field */}
+              <div className="p-4 md:p-4 border-r border-gray-200">
+                <label className="block text-xs md:text-sm font-medium text-gray-500 mb-2">
+                  Date <span className="text-gray-400">(Optional)</span>
                 </label>
-                <Input
-                  type="text"
-                  placeholder="Search for city, area or salon name"
-                  value={searchLocation}
-                  onChange={(e) => setSearchLocation(e.target.value)}
-                  className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="w-full h-10 md:h-12 px-0 justify-start text-left text-base md:text-sm hover:bg-transparent border-0 transition-opacity"
+                      style={{
+                        fontWeight: selectedDate ? "600" : "400",
+                        color: selectedDate ? "#111827" : "#6b7280",
+                        opacity: selectedDate ? "1" : "0.7",
+                      }}
+                    >
+                      {selectedDate
+                        ? format(selectedDate, "dd MMM, yyyy")
+                        : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Suspense
+                      fallback={<div className="p-4">Loading calendar...</div>}
+                    >
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={(date) => {
+                          setSelectedDate(date);
+                          if (date) {
+                            setPreferredDate(format(date, "PPP"));
+                          }
+                        }}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </Suspense>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              {/* Service, Date and Duration Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">
-                    Service
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder="Spa, Massage, Hair Care"
-                    value={selectedService}
-                    onChange={(e) => setSelectedService(e.target.value)}
-                    className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">
-                    Preferred Date
-                  </label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500 justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {selectedDate
-                          ? format(selectedDate, "PPP")
-                          : "Select date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Suspense
-                        fallback={
-                          <div className="p-4">Loading calendar...</div>
-                        }
-                      >
-                        <Calendar
-                          mode="single"
-                          selected={selectedDate}
-                          onSelect={(date) => {
-                            setSelectedDate(date);
-                            if (date) {
-                              setPreferredDate(format(date, "PPP"));
-                            }
-                          }}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                        />
-                      </Suspense>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">
-                    Duration
-                  </label>
-                  <Select
-                    value={selectedDuration}
-                    onValueChange={setSelectedDuration}
-                  >
-                    <SelectTrigger className="w-full h-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-coral-500 focus:border-coral-500">
-                      <div className="flex items-center">
-                        <Clock className="mr-2 h-4 w-4 text-gray-500" />
-                        <SelectValue placeholder="Select duration" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30min">30 minutes</SelectItem>
-                      <SelectItem value="45min">45 minutes</SelectItem>
-                      <SelectItem value="1hour">1 hour</SelectItem>
-                      <SelectItem value="1.5hours">1.5 hours</SelectItem>
-                      <SelectItem value="2hours">2 hours</SelectItem>
-                      <SelectItem value="2.5hours">2.5 hours</SelectItem>
-                      <SelectItem value="3hours">3 hours</SelectItem>
-                      <SelectItem value="halfday">
-                        Half day (4-5 hours)
-                      </SelectItem>
-                      <SelectItem value="fullday">
-                        Full day (6-8 hours)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Service Field - Optional Filter */}
+              <div className="p-4 md:p-4">
+                <label className="block text-xs md:text-sm font-medium text-gray-500 mb-2">
+                  Service <span className="text-gray-400">(Optional)</span>
+                </label>
+                <Select
+                  value={selectedService}
+                  onValueChange={setSelectedService}
+                >
+                  <SelectTrigger className="w-full h-10 md:h-12 px-0 border-0 hover:bg-transparent focus:ring-0 text-base md:text-sm [&>span]:text-gray-600 [&>span]:font-normal [&>span]:opacity-70 [&[data-state=open]>span]:opacity-100 [&>span[data-placeholder='false']]:text-gray-900 [&>span[data-placeholder='false']]:font-semibold [&>span[data-placeholder='false']]:opacity-100">
+                    <SelectValue placeholder="Choose service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All services</SelectItem>
+                    <SelectItem value="hair">Hair Care</SelectItem>
+                    <SelectItem value="spa">Spa & Massage</SelectItem>
+                    <SelectItem value="facial">Facial</SelectItem>
+                    <SelectItem value="nails">Nails</SelectItem>
+                    <SelectItem value="makeup">Makeup</SelectItem>
+                    <SelectItem value="waxing">Waxing</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
 
-              {/* Search Button */}
+            {/* Duration Field - Mobile only, optional filter */}
+            <div className="p-4 md:p-4 border-b border-gray-200 md:hidden">
+              <label className="block text-xs font-medium text-gray-500 mb-2">
+                Duration <span className="text-gray-400">(Optional)</span>
+              </label>
+              <Select
+                value={selectedDuration}
+                onValueChange={setSelectedDuration}
+              >
+                <SelectTrigger className="w-full h-10 px-0 border-0 hover:bg-transparent focus:ring-0 text-base [&>span]:text-gray-600 [&>span]:font-normal [&>span]:opacity-70 [&[data-state=open]>span]:opacity-100 [&>span[data-placeholder='false']]:text-gray-900 [&>span[data-placeholder='false']]:font-semibold [&>span[data-placeholder='false']]:opacity-100">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any duration</SelectItem>
+                  <SelectItem value="30min">30 minutes</SelectItem>
+                  <SelectItem value="1hour">1 hour</SelectItem>
+                  <SelectItem value="1.5hours">1.5 hours</SelectItem>
+                  <SelectItem value="2hours">2 hours</SelectItem>
+                  <SelectItem value="3hours">3+ hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Search Button - Exactly like OYO */}
+            <div className="p-3 md:p-4">
               <Button
-                className="w-full h-12 bg-coral-500 hover:bg-coral-600 text-white font-semibold rounded-lg"
+                className="w-full h-14 md:h-14 bg-coral-500 hover:bg-coral-600 text-white text-base md:text-lg font-semibold rounded-lg md:rounded-xl shadow-md hover:shadow-lg transition-all"
                 onClick={() => {
-                  // Create search parameters
                   const params = new URLSearchParams();
-                  if (searchLocation) params.set("location", searchLocation);
-                  if (selectedService) params.set("service", selectedService);
+                  // Primary search query (location or salon name)
+                  if (searchQuery.trim()) params.set("q", searchQuery.trim());
+                  // Optional filters
+                  if (selectedService && selectedService !== "all")
+                    params.set("service", selectedService);
                   if (preferredDate) params.set("date", preferredDate);
-                  if (selectedDuration)
+                  if (selectedDuration && selectedDuration !== "any")
                     params.set("duration", selectedDuration);
 
-                  // Log the search parameters for testing
-                  console.log("Search Parameters:", {
-                    location: searchLocation,
-                    service: selectedService,
-                    date: preferredDate,
-                    duration: selectedDuration,
-                    selectedDate: selectedDate,
-                  });
-
-                  // Build the URL with parameters
                   const queryString = params.toString();
                   const url = queryString
                     ? `/salons?${queryString}`
                     : "/salons";
 
-                  console.log("Navigating to:", url);
                   router.push(url as Route);
                 }}
               >
-                <Search className="mr-2 h-4 w-4" />
-                Search Services
+                Search
               </Button>
-
-              {/* Quick Test Buttons */}
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchLocation("Mumbai");
-                    setSelectedService("Spa");
-                    setPreferredDate("Today");
-                    setSelectedDuration("2hours");
-                  }}
-                  className="text-xs"
-                >
-                  Quick Fill: Mumbai Spa
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchLocation("");
-                    setSelectedService("");
-                    setPreferredDate("");
-                    setSelectedDate(undefined);
-                    setSelectedDuration("");
-                  }}
-                  className="text-xs"
-                >
-                  Clear All
-                </Button>
-              </div>
             </div>
           </div>
         </div>
+      </section>
+      {/* Explore Destinations - OYO Style */}
+      <section className="py-4 md:py-6 bg-white border-t border-gray-100">
+        <div className="container mx-auto px-4">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4\">
+            Explore your next destination
+          </h2>
 
-        {/* Explore Cities */}
-        <div className="bg-white border-t border-gray-200">
-          <div className="container mx-auto px-4 py-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Popular spa & salon destinations
-            </h3>
-
-            <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
-              {[
-                {
-                  name: "Near me",
-                  image:
-                    "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=150&h=150&fit=crop",
-                },
-                {
-                  name: "Bangalore",
-                  image:
-                    "https://images.unsplash.com/photo-1558431382-27e303142255?w=150&h=150&fit=crop",
-                },
-                {
-                  name: "Chennai",
-                  image:
-                    "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=150&h=150&fit=crop",
-                },
-                {
-                  name: "Delhi",
-                  image:
-                    "https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=150&h=150&fit=crop",
-                },
-                {
-                  name: "Gurgaon",
-                  image:
-                    "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=150&h=150&fit=crop",
-                },
-                {
-                  name: "Hyderabad",
-                  image:
-                    "https://images.unsplash.com/photo-1595658658481-d53d3f999875?w=150&h=150&fit=crop",
-                },
-              ].map((city) => (
-                <button
-                  key={city.name}
-                  className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-50 transition-colors group"
-                  onClick={() => {
-                    // Set the location in the search form
-                    setSearchLocation(city.name);
-                    // Scroll back to search form
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                >
-                  <div className="w-16 h-16 rounded-lg overflow-hidden mb-2">
-                    <Image
-                      src={city.image}
-                      alt={city.name}
-                      width={64}
-                      height={64}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      loading="lazy"
-                      placeholder="blur"
-                      blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 group-hover:text-coral-600">
-                    {city.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+          <div className="flex gap-4 md:gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4\">
+            {[
+              {
+                name: "Near me",
+                icon: "📍",
+                image:
+                  "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=120&h=120&fit=crop",
+              },
+              {
+                name: "Bangalore",
+                icon: "🏛️",
+                image:
+                  "https://images.unsplash.com/photo-1558431382-27e303142255?w=120&h=120&fit=crop",
+              },
+              {
+                name: "Chennai",
+                icon: "🕉️",
+                image:
+                  "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=120&h=120&fit=crop",
+              },
+              {
+                name: "Delhi",
+                icon: "🏛️",
+                image:
+                  "https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=120&h=120&fit=crop",
+              },
+              {
+                name: "Gurgaon",
+                icon: "🏢",
+                image:
+                  "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=120&h=120&fit=crop",
+              },
+              {
+                name: "Hyderabad",
+                icon: "🏰",
+                image:
+                  "https://images.unsplash.com/photo-1595658658481-d53d3f999875?w=120&h=120&fit=crop",
+              },
+            ].map((city) => (
+              <button
+                key={city.name}
+                className="flex-shrink-0 flex flex-col items-center group"
+                onClick={() => {
+                  setSearchQuery(city.name);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl md:rounded-2xl overflow-hidden mb-2 shadow-sm border-2 border-white group-hover:border-coral-300 transition-all">
+                  <Image
+                    src={city.image}
+                    alt={city.name}
+                    width={80}
+                    height={80}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                </div>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-coral-600">
+                  {city.name}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
-      </header>
+      </section>
       {/* Promotional Banners - OYO Style */}
       <section className="py-4">
         <div className="container mx-auto px-4 space-y-4">
@@ -616,8 +592,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-            {featuredServices.map((service) => (
-              <ServiceCard key={service.id} {...service} />
+            {featuredSalons.slice(0, 4).map((salon) => (
+              <ServiceCard key={salon.id} {...salon} />
             ))}
           </div>
 
@@ -633,8 +609,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {featuredServices.map((service) => (
-              <ServiceCard key={`second-${service.id}`} {...service} />
+            {featuredSalons.slice(4, 8).map((salon) => (
+              <ServiceCard key={`second-${salon.id}`} {...salon} />
             ))}
           </div>
 
@@ -650,8 +626,8 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {featuredServices.map((service) => (
-              <ServiceCard key={`third-${service.id}`} {...service} />
+            {featuredSalons.slice(8, 12).map((salon) => (
+              <ServiceCard key={`third-${salon.id}`} {...salon} />
             ))}
           </div>
         </div>

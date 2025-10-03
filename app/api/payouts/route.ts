@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { verifyAuth } from "@/lib/middleware";
+import { serverLogger as logger } from "@/lib/logger";
 
 // Dynamic imports to avoid compilation issues
 const getPayoutModels = async () => {
@@ -68,7 +69,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error fetching payouts:", error);
+    logger.error("Error fetching payouts", {
+      error: error instanceof Error ? error.message : String(error),
+      userId: (request as any).user?.id,
+    });
+
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },
@@ -126,7 +131,11 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("Error creating payout:", error);
+    logger.error("Error creating payout", {
+      error: error instanceof Error ? error.message : String(error),
+      userId: (request as any).user?.id,
+    });
+
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

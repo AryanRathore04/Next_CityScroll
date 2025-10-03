@@ -4,14 +4,64 @@ import { NotificationService } from "@/lib/notification-service";
 import { serverLogger as logger } from "@/lib/logger";
 import { addDays, startOfDay, endOfDay } from "date-fns";
 
+// Verify cron authorization
+function verifyCronAuth(request: NextRequest): boolean {
+  const authHeader = request.headers.get("authorization");
+  const cronKey = authHeader?.replace("Bearer ", "");
+  return cronKey === process.env.CRON_SECRET_KEY;
+}
+
+// GET /api/cron/reminders - Test endpoint to check cron job status
+export async function GET(request: NextRequest) {
+  try {
+    if (!verifyCronAuth(request)) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    await connectDB();
+    const Booking = (await import("../../../../models/Booking")).default;
+
+    const tomorrow = addDays(new Date(), 1);
+    const startOfTomorrow = startOfDay(tomorrow);
+    const endOfTomorrow = endOfDay(tomorrow);
+
+    const bookingsCount = await Booking.countDocuments({
+      datetime: {
+        $gte: startOfTomorrow,
+        $lte: endOfTomorrow,
+      },
+      status: { $in: ["pending", "confirmed"] },
+      reminderSent: { $ne: true },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        bookingsNeedingReminders: bookingsCount,
+        targetDate: tomorrow.toISOString().split("T")[0],
+        cronConfigured: !!process.env.CRON_SECRET_KEY,
+      },
+      message: "Cron job is properly configured",
+    });
+  } catch (error) {
+    logger.error("Cron status check failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return NextResponse.json(
+      { success: false, error: "Status check failed" },
+      { status: 500 },
+    );
+  }
+}
+
 // POST /api/cron/reminders - Send booking reminders (24 hours before)
 export async function POST(request: NextRequest) {
   try {
-    // Verify cron key for security
-    const authHeader = request.headers.get("authorization");
-    const cronKey = authHeader?.replace("Bearer ", "");
-
-    if (cronKey !== process.env.CRON_SECRET_KEY) {
+    if (!verifyCronAuth(request)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import CompanyInfo from "@/models/CompanyInfo";
+import { requireAuth } from "@/lib/middleware";
+import { validatePermission, PERMISSIONS } from "@/lib/permissions";
+import { serverLogger as logger } from "@/lib/logger";
 
 /**
  * GET /api/company-info
@@ -15,6 +18,7 @@ export async function GET() {
 
     // If no company info exists, create default one
     if (!companyInfo) {
+      logger.info("No company info found, creating default");
       companyInfo = await CompanyInfo.create({
         story: {
           title: "Our Story",
@@ -89,6 +93,9 @@ export async function GET() {
         },
         isActive: true,
       });
+      logger.info("Default company info created", {
+        companyInfoId: companyInfo._id,
+      });
     }
 
     return NextResponse.json(companyInfo, {
@@ -98,11 +105,16 @@ export async function GET() {
       },
     });
   } catch (error: any) {
-    console.error("❌ [COMPANY INFO API] Error fetching company info:", error);
+    logger.error("Error fetching company info", {
+      error: error.message,
+      stack: error.stack,
+    });
     return NextResponse.json(
       {
         error: "Failed to fetch company information",
         message: error.message || "Internal server error",
+        code: "COMPANY_INFO_FETCH_ERROR",
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     );
@@ -112,10 +124,46 @@ export async function GET() {
 /**
  * PUT /api/company-info
  * Update company information (Admin only)
- * TODO: Add authentication middleware to ensure only admins can update
  */
-export async function PUT(request: NextRequest) {
+async function updateCompanyInfoHandler(request: NextRequest) {
   try {
+    // Check authentication and admin permission
+    const currentUser = (
+      request as unknown as { user?: { id: string; userType: string } }
+    ).user;
+    if (!currentUser) {
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 401 },
+      );
+    }
+
+    // Validate admin permission
+    try {
+      validatePermission(
+        currentUser.userType as any,
+        PERMISSIONS.MANAGE_PLATFORM_SETTINGS,
+        currentUser.id,
+      );
+    } catch (error: any) {
+      logger.warn("Unauthorized company info update attempt", {
+        userId: currentUser.id,
+        userType: currentUser.userType,
+      });
+      return NextResponse.json(
+        {
+          error: "Access denied. Admin permission required.",
+          code: "FORBIDDEN",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 403 },
+      );
+    }
+
     await connectDB();
 
     const body = await request.json();
@@ -127,9 +175,17 @@ export async function PUT(request: NextRequest) {
       // Update existing
       Object.assign(companyInfo, body);
       await companyInfo.save();
+      logger.info("Company info updated", {
+        updatedBy: currentUser.id,
+        companyInfoId: companyInfo._id,
+      });
     } else {
       // Create new
       companyInfo = await CompanyInfo.create({ ...body, isActive: true });
+      logger.info("Company info created", {
+        createdBy: currentUser.id,
+        companyInfoId: companyInfo._id,
+      });
     }
 
     return NextResponse.json(
@@ -140,7 +196,10 @@ export async function PUT(request: NextRequest) {
       { status: 200 },
     );
   } catch (error: any) {
-    console.error("❌ [COMPANY INFO API] Error updating company info:", error);
+    logger.error("Error updating company info", {
+      error: error.message,
+      stack: error.stack,
+    });
     return NextResponse.json(
       {
         error: "Failed to update company information",
@@ -150,3 +209,5 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+export const PUT = requireAuth(updateCompanyInfoHandler as any);

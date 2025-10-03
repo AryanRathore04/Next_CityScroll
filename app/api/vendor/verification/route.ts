@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { verifyAuth } from "@/lib/middleware";
+import { serverLogger as logger } from "@/lib/logger";
 
 // Dynamic import to avoid compilation issues
 const getVendorVerificationModel = async () => {

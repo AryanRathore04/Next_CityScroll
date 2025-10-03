@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { serverLogger as logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -45,38 +46,17 @@ export async function GET() {
       });
     }
 
-    // API Health Check
+    // API Health Check (basic check without external calls)
     const apiStartTime = Date.now();
     try {
-      // Test internal API endpoint
-      const response = await fetch(
-        `${
-          process.env.NEXTAUTH_URL || "http://localhost:3000"
-        }/api/vendor/profile?vendorId=test`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-
+      // Simple check - if we got here, API is running
       const apiLatency = Date.now() - apiStartTime;
-
-      if (response.status === 400) {
-        // Expected for test ID
-        checks.push({
-          service: "api",
-          status: "healthy",
-          latency: apiLatency,
-          timestamp: new Date().toISOString(),
-        });
-      } else {
-        checks.push({
-          service: "api",
-          status: apiLatency > 2000 ? "degraded" : "healthy",
-          latency: apiLatency,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      checks.push({
+        service: "api",
+        status: "healthy",
+        latency: apiLatency,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       checks.push({
         service: "api",
@@ -157,6 +137,12 @@ export async function GET() {
     const statusCode =
       overall === "healthy" ? 200 : overall === "degraded" ? 200 : 503;
 
+    logger.info("Health check completed", {
+      overall,
+      totalChecks: checks.length,
+      duration: Date.now() - startTime,
+    });
+
     return NextResponse.json(response, {
       status: statusCode,
       headers: {
@@ -165,6 +151,11 @@ export async function GET() {
       },
     });
   } catch (error) {
+    logger.error("Health check failed", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
       {
         overall: "down",

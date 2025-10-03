@@ -1,54 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { verifyAuth } from "@/lib/middleware";
 import User from "@/models/User";
 import Booking from "@/models/Booking";
 import Review from "@/models/Review";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+import { serverLogger as logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "No token provided" }, { status: 401 });
+    const user = await verifyAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
-
-    const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
 
     await connectDB();
 
-    const user = await User.findById(decoded.userId).select(
+    const userDoc = await User.findById(user.id).select(
       "-password -refreshToken",
     );
-    if (!user) {
+    if (!userDoc) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     // Fetch user statistics
     const [totalBookings, completedBookings, reviewsReceived] =
       await Promise.all([
-        Booking.countDocuments({ customerId: user._id.toString() }),
+        Booking.countDocuments({ customerId: userDoc._id.toString() }),
         Booking.countDocuments({
-          customerId: user._id.toString(),
+          customerId: userDoc._id.toString(),
           status: "completed",
         }),
-        user.userType === "vendor"
+        userDoc.userType === "vendor"
           ? Review.countDocuments({
-              vendorId: user._id.toString(),
+              vendorId: userDoc._id.toString(),
               status: "published",
             })
           : 0,
       ]);
 
     // Calculate average rating for vendors
-    let averageRating = user.rating || 0;
-    if (user.userType === "vendor" && reviewsReceived > 0) {
+    let averageRating = userDoc.rating || 0;
+    if (userDoc.userType === "vendor" && reviewsReceived > 0) {
       const ratingAggregation = await Review.aggregate([
         {
           $match: {
-            vendorId: user._id.toString(),
+            vendorId: userDoc._id.toString(),
             status: "published",
           },
         },
@@ -66,34 +65,39 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate member duration
-    const memberSince = user.createdAt;
+    const memberSince = userDoc.createdAt;
     const daysSinceMember = Math.floor(
       (Date.now() - memberSince.getTime()) / (1000 * 60 * 60 * 24),
     );
 
     const userProfile = {
-      id: user._id.toString(),
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      userType: user.userType,
-      businessName: user.businessName,
-      businessType: user.businessType,
-      businessAddress: user.businessAddress,
-      profileImage: user.profileImage,
-      description: user.description,
-      verified: user.verified,
-      status: user.status,
+      id: userDoc._id.toString(),
+      email: userDoc.email,
+      firstName: userDoc.firstName,
+      lastName: userDoc.lastName,
+      phone: userDoc.phone,
+      userType: userDoc.userType,
+      businessName: userDoc.businessName,
+      businessType: userDoc.businessType,
+      businessAddress: userDoc.businessAddress,
+      profileImage: userDoc.profileImage,
+      description: userDoc.description,
+      verified: userDoc.verified,
+      status: userDoc.status,
       rating: averageRating,
       totalBookings,
       completedBookings,
       reviewsReceived,
       memberSince: memberSince.toISOString(),
       daysSinceMember,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
+      createdAt: userDoc.createdAt.toISOString(),
+      updatedAt: userDoc.updatedAt.toISOString(),
     };
+
+    logger.info("User profile fetched", {
+      userId: user.id,
+      userType: userDoc.userType,
+    });
 
     return NextResponse.json(
       { user: userProfile },
@@ -105,11 +109,10 @@ export async function GET(request: NextRequest) {
       },
     );
   } catch (error: any) {
-    console.error("❌ [USER PROFILE API] Error:", error);
-
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    logger.error("Error fetching user profile", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     return NextResponse.json(
       { error: "Failed to fetch user profile", message: error.message },
@@ -120,13 +123,13 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "No token provided" }, { status: 401 });
+    const user = await verifyAuth(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
     }
-
-    const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
 
     const body = await request.json();
     const {
@@ -152,29 +155,33 @@ export async function PUT(request: NextRequest) {
     if (businessType) updateData.businessType = businessType;
     if (businessAddress) updateData.businessAddress = businessAddress;
 
-    const user = await User.findByIdAndUpdate(
-      decoded.userId,
+    const userDoc = await User.findByIdAndUpdate(
+      user.id,
       { $set: updateData },
       { new: true, runValidators: true },
     ).select("-password -refreshToken");
 
-    if (!user) {
+    if (!userDoc) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    logger.info("User profile updated", {
+      userId: user.id,
+      fields: Object.keys(updateData),
+    });
 
     return NextResponse.json(
       {
         message: "Profile updated successfully",
-        user: user.toSafeObject(),
+        user: userDoc.toSafeObject(),
       },
       { status: 200 },
     );
   } catch (error: any) {
-    console.error("❌ [USER PROFILE UPDATE API] Error:", error);
-
-    if (error.name === "JsonWebTokenError") {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
+    logger.error("Error updating user profile", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     return NextResponse.json(
       { error: "Failed to update profile", message: error.message },

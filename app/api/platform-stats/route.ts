@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import Review from "@/models/Review";
+import { serverLogger as logger } from "@/lib/logger";
 
 /**
  * GET /api/platform-stats
@@ -87,7 +88,11 @@ export async function GET() {
       },
     );
   } catch (error: any) {
-    console.error("❌ [PLATFORM STATS API] Error fetching stats:", error);
+    logger.error("Error fetching platform statistics", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
       {
         error: "Failed to fetch platform statistics",

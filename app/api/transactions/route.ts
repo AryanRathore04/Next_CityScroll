@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { verifyAuth } from "@/lib/middleware";
+import { serverLogger as logger } from "@/lib/logger";
 
 // Dynamic imports to avoid compilation issues
 const getTransactionModels = async () => {
@@ -88,7 +89,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error fetching transactions:", error);
+    logger.error("Error fetching transactions", {
+      error: error instanceof Error ? error.message : String(error),
+      userId: (request as any).user?.id,
+    });
+
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },
@@ -158,7 +163,11 @@ export async function POST(request: NextRequest) {
       message: "Transaction created successfully",
     });
   } catch (error) {
-    console.error("Error creating transaction:", error);
+    logger.error("Error creating transaction", {
+      error: error instanceof Error ? error.message : String(error),
+      userId: (request as any).user?.id,
+    });
+
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 },

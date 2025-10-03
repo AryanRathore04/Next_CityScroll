@@ -47,42 +47,6 @@ async function refreshTokenHandler(request: NextRequest) {
       );
     }
 
-    // Handle test users (they don't exist in database)
-    if (decoded.id.startsWith("test-")) {
-      console.log("[auth/refresh] handling test user:", decoded.id);
-
-      // Generate new tokens for test user
-      const accessToken = generateAccessToken({
-        id: decoded.id,
-        email: decoded.email,
-        userType: decoded.userType,
-      });
-
-      const newRefreshToken = generateRefreshToken({
-        id: decoded.id,
-        email: decoded.email,
-        userType: decoded.userType,
-      });
-
-      // Set new refresh token in HttpOnly cookie
-      const refreshCookie = createRefreshTokenCookie(newRefreshToken);
-
-      const response = NextResponse.json({
-        success: true,
-        accessToken,
-        user: {
-          id: decoded.id,
-          email: decoded.email,
-          userType: decoded.userType,
-          firstName: "Test",
-          lastName: "User",
-        },
-      });
-
-      response.headers.set("Set-Cookie", refreshCookie);
-      return response;
-    }
-
     // Connect to database and verify user still exists with stored refresh token
     await connectDB();
     const User = (await import("../../../../models/User")).default;

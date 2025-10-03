@@ -57,7 +57,6 @@ const ReviewSchema = new Schema<IReview>(
       type: String,
       required: true,
       ref: "Booking",
-      unique: true, // One review per booking
     },
     customerId: {
       type: String,

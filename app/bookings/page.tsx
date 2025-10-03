@@ -231,13 +231,8 @@ export default function BookingsPage() {
 }
 
 function BookingCard({ booking }: { booking: Booking }) {
-  const router = useRouter();
-
   return (
-    <Card
-      className="hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => router.push(`/booking/${booking._id}` as Route)}
-    >
+    <Card className="hover:shadow-md transition-shadow">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
